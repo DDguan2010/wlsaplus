@@ -6,6 +6,16 @@ const osxSign = process.env.APPLE_IDENTITY
 const osxNotarize = process.env.APPLE_ID && process.env.APPLE_APP_PASSWORD && process.env.APPLE_TEAM_ID
   ? { appleId: process.env.APPLE_ID, appleIdPassword: process.env.APPLE_APP_PASSWORD, teamId: process.env.APPLE_TEAM_ID }
   : undefined;
+const windowsSign = process.env.WINDOWS_CERTIFICATE_FILE
+  ? {
+      certificateFile: process.env.WINDOWS_CERTIFICATE_FILE,
+      certificatePassword: process.env.WINDOWS_CERTIFICATE_PASSWORD,
+      hashes: ['sha256'],
+      timestampServer: 'http://timestamp.digicert.com',
+      description: 'WLSAPlus',
+      website: 'https://github.com/DDguan2010/wlsaplus',
+    }
+  : undefined;
 
 module.exports = {
   packagerConfig: {
@@ -15,6 +25,7 @@ module.exports = {
     icon: path.join(__dirname, 'build', 'icon'),
     appBundleId: 'cn.org.wlsash.wlsaplus',
     appCategoryType: 'public.app-category.education',
+    windowsSign,
     osxSign,
     osxNotarize,
     extraResource: [path.join(__dirname, 'build', 'vpn-core')],
@@ -39,7 +50,16 @@ module.exports = {
   },
   rebuildConfig: {},
   makers: [
-    { name: '@electron-forge/maker-squirrel', config: { name: 'WLSAPlus', setupExe: 'WLSAPlus-Setup.exe', setupIcon: path.join(__dirname, 'build', 'icon.ico') }, platforms: ['win32'] },
+    {
+      name: '@electron-forge/maker-squirrel',
+      config: {
+        name: 'WLSAPlus',
+        setupExe: 'WLSAPlus-Setup.exe',
+        setupIcon: path.join(__dirname, 'build', 'icon.ico'),
+        windowsSign,
+      },
+      platforms: ['win32'],
+    },
     { name: '@electron-forge/maker-zip', platforms: ['darwin'] },
     { name: '@electron-forge/maker-dmg', config: { name: 'WLSAPlus' }, platforms: ['darwin'] },
   ],
