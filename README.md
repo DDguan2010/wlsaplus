@@ -31,11 +31,10 @@ Normal pushes to `master` build downloadable test artifacts without creating a G
 Optional signing secrets:
 
 - Android: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
-- Windows Authenticode: `WINDOWS_CERTIFICATE_BASE64`, `WINDOWS_CERTIFICATE_PASSWORD`
 - macOS signing: `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_IDENTITY`
 - macOS notarization: `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID`
 
-Windows Releases require a trusted Authenticode certificate and fail rather than publish an unsigned installer. Normal branch builds may still produce unsigned Windows test artifacts. Without the other signing secrets, Android produces an installable debug APK and macOS produces an unsigned package.
+Without signing secrets, Android produces an installable debug APK and macOS produces an unsigned package.
 
 ## PowerSchool network recorder
 

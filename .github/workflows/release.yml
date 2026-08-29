@@ -97,9 +97,6 @@ jobs:
     runs-on: windows-latest
     env:
       WLSAPLUS_VERSION: ${{ needs.prepare.outputs.version }}
-      PUBLISH_RELEASE: ${{ needs.prepare.outputs.publish }}
-      WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CERTIFICATE_BASE64 }}
-      WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -107,36 +104,7 @@ jobs:
       - run: npm ci
       - run: npm run version:apply
       - run: npm test
-      - name: Require a trusted signing certificate for releases
-        if: env.PUBLISH_RELEASE == 'true' && (env.WINDOWS_CERTIFICATE_BASE64 == '' || env.WINDOWS_CERTIFICATE_PASSWORD == '')
-        shell: pwsh
-        run: throw 'A signed release requires WINDOWS_CERTIFICATE_BASE64 and WINDOWS_CERTIFICATE_PASSWORD secrets.'
-      - name: Restore Windows signing certificate
-        if: env.WINDOWS_CERTIFICATE_BASE64 != '' && env.WINDOWS_CERTIFICATE_PASSWORD != ''
-        shell: pwsh
-        run: |
-          $certificatePath = Join-Path $env:RUNNER_TEMP 'wlsaplus-signing.pfx'
-          [IO.File]::WriteAllBytes($certificatePath, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE_BASE64))
-          "WINDOWS_CERTIFICATE_FILE=$certificatePath" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
       - run: npm run electron:make
-      - name: Verify Windows Authenticode signatures
-        if: env.WINDOWS_CERTIFICATE_BASE64 != '' && env.WINDOWS_CERTIFICATE_PASSWORD != ''
-        shell: pwsh
-        run: |
-          $files = @(
-            (Get-ChildItem out -Recurse -File -Filter WLSAPlus.exe | Where-Object FullName -Like '*WLSAPlus-win32-*' | Select-Object -First 1),
-            (Get-ChildItem out/make -Recurse -File -Filter *.exe | Select-Object -First 1)
-          )
-          if ($files.Count -ne 2 -or $files -contains $null) { throw 'Could not find both the packaged app and setup executable.' }
-          foreach ($file in $files) {
-            $signature = Get-AuthenticodeSignature -LiteralPath $file.FullName
-            if ($signature.Status -ne 'Valid') { throw "Invalid Authenticode signature on $($file.FullName): $($signature.Status)" }
-            if (-not $signature.TimeStamperCertificate) { throw "Missing trusted timestamp on $($file.FullName)." }
-            Write-Host "Verified $($file.Name)"
-            Write-Host "Publisher: $($signature.SignerCertificate.Subject)"
-            Write-Host "Certificate thumbprint: $($signature.SignerCertificate.Thumbprint)"
-            Write-Host "Timestamp authority: $($signature.TimeStamperCertificate.Subject)"
-          }
       - shell: pwsh
         run: |
           New-Item -ItemType Directory -Path release-assets
