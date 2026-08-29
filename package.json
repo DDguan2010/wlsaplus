@@ -12,6 +12,7 @@
     "build": "ng build",
     "build:web": "ng build --configuration production",
     "test": "ng test --watch=false",
+    "version:apply": "node scripts/set-build-version.mjs",
     "record:powerschool": "node scripts/record-powerschool.mjs",
     "icons:generate": "node scripts/generate-icons.mjs",
     "vpn:core": "node scripts/download-vpn-core.mjs",

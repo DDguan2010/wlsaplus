@@ -13,6 +13,7 @@ import type { DesktopCardType, ThemeMode } from '../core/models';
 import { PlatformService } from '../core/platform.service';
 import { PowerSchoolService } from '../core/powerschool.service';
 import { ConfirmDialogComponent } from '../shared/text-dialog.component';
+import { BUILD_VERSION } from '../build-info';
 
 @Component({
   selector: 'app-settings-page',
@@ -39,7 +40,7 @@ import { ConfirmDialogComponent } from '../shared/text-dialog.component';
       }
 
       <section><h2 class="section-title">Local Data</h2><div class="settings-list surface danger-zone"><div class="setting"><div><strong>Clear this device</strong><span>Remove saved credentials, schedule, and tasks.</span></div><button mat-stroked-button (click)="clearData()">Clear data</button></div></div></section>
-      <footer>WLSAPlus 1.0.0 · Local-first student tools</footer>
+      <footer>WLSAPlus {{ version }} · Local-first student tools</footer>
     </div>
   `,
   styles: `
@@ -52,6 +53,7 @@ import { ConfirmDialogComponent } from '../shared/text-dialog.component';
   `,
 })
 export class SettingsPage {
+  readonly version = BUILD_VERSION;
   readonly store = inject(LocalStore); readonly clock = inject(ClockService); readonly platform = inject(PlatformService);
   private readonly service = inject(PowerSchoolService); private readonly router = inject(Router); private readonly snack = inject(MatSnackBar); private readonly dialog = inject(MatDialog);
   readonly syncing = signal(false);

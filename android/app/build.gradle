@@ -1,5 +1,8 @@
 apply plugin: 'com.android.application'
 
+def wlsaVersionCode = (System.getenv('WLSAPLUS_VERSION_CODE') ?: '1').toInteger()
+def wlsaVersionName = System.getenv('WLSAPLUS_VERSION') ?: '1.0.0'
+
 android {
     namespace = "cn.org.wlsash.wlsaplus"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +10,8 @@ android {
         applicationId "cn.org.wlsash.wlsaplus"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode wlsaVersionCode
+        versionName wlsaVersionName
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
