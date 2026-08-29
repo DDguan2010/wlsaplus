@@ -1,0 +1,12 @@
+{
+  "name": "WLSAPlus",
+  "short_name": "WLSAPlus",
+  "description": "A local-first schedule and task dashboard for WLSA students.",
+  "start_url": "./#/home",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    { "src": "icons/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

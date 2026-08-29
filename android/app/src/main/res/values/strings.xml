@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">WLSAPlus</string>
+    <string name="title_activity_main">WLSAPlus</string>
+    <string name="package_name">cn.org.wlsash.wlsaplus</string>
+    <string name="custom_url_scheme">cn.org.wlsash.wlsaplus</string>
+</resources>

@@ -1,0 +1,16 @@
+node_modules/
+captures/
+playwright-report/
+test-results/
+.playwright-cli/
+output/
+.angular/
+dist/
+out/
+.tmp-angular/
+android/.gradle/
+android/app/build/
+android/local.properties
+*.keystore
+*.jks
+.env

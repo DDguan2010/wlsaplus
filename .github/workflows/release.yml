@@ -1,0 +1,104 @@
+name: Build and release
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 21, cache: gradle }
+      - run: npm ci
+      - run: npm run capacitor:sync
+      - name: Restore Android signing key
+        if: env.ANDROID_KEYSTORE_BASE64 != ''
+        run: echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/wlsaplus.jks"
+      - name: Build APK
+        run: |
+          cd android
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/wlsaplus.jks"
+            ./gradlew assembleRelease
+          else
+            ./gradlew assembleDebug
+          fi
+      - name: Stage APK
+        run: find android/app/build/outputs/apk -name '*.apk' -exec cp '{}' WLSAPlus.apk \;
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: WLSAPlus.apk }
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+      - run: npm run electron:make
+      - shell: pwsh
+        run: Get-ChildItem out/make -Recurse -File | Where-Object { $_.Extension -in '.exe','.nupkg' } | Copy-Item -Destination .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: |
+            *.exe
+            *.nupkg
+
+  macos:
+    runs-on: macos-latest
+    env:
+      APPLE_CERTIFICATE_BASE64: ${{ secrets.APPLE_CERTIFICATE_BASE64 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_IDENTITY: ${{ secrets.APPLE_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Import Apple signing certificate
+        if: env.APPLE_CERTIFICATE_BASE64 != ''
+        run: |
+          echo "$APPLE_CERTIFICATE_BASE64" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p actions "$RUNNER_TEMP/build.keychain"
+          security default-keychain -s "$RUNNER_TEMP/build.keychain"
+          security unlock-keychain -p actions "$RUNNER_TEMP/build.keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$RUNNER_TEMP/build.keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k actions "$RUNNER_TEMP/build.keychain"
+      - run: npm run electron:make
+      - run: find out/make -type f \( -name '*.dmg' -o -name '*.zip' \) -exec cp '{}' . \;
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            *.dmg
+            *.zip
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [android, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: artifacts/*
