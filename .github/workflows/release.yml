@@ -31,6 +31,7 @@ jobs:
       - name: Build APK
         run: |
           cd android
+          chmod +x gradlew
           if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
             export ANDROID_KEYSTORE_FILE="$RUNNER_TEMP/wlsaplus.jks"
             ./gradlew assembleRelease
