@@ -7,6 +7,36 @@ const nodeNet = require('node:net');
 const path = require('node:path');
 const { promisify } = require('node:util');
 
+function handleSquirrelEvent() {
+  if (process.platform !== 'win32') return false;
+  const event = process.argv[1];
+  if (!event?.startsWith('--squirrel-')) return false;
+  const updateExe = path.resolve(path.dirname(process.execPath), '..', 'Update.exe');
+  const exeName = path.basename(process.execPath);
+  const runUpdate = (args) => {
+    try {
+      const child = spawn(updateExe, args, { detached: true, windowsHide: true, stdio: 'ignore' });
+      child.on('error', () => {});
+      child.unref();
+    } catch { /* Installation can still be repaired by rerunning Setup. */ }
+  };
+  if (event === '--squirrel-install' || event === '--squirrel-updated') {
+    runUpdate(['--createShortcut', exeName]);
+    setTimeout(() => app.quit(), 1_000);
+    return true;
+  } else if (event === '--squirrel-uninstall') {
+    runUpdate(['--removeShortcut', exeName]);
+    setTimeout(() => app.quit(), 1_000);
+    return true;
+  } else if (event === '--squirrel-obsolete') {
+    app.quit();
+    return true;
+  }
+  return false;
+}
+
+const isSquirrelEvent = handleSquirrelEvent();
+
 const execFileAsync = promisify(execFile);
 
 const CARD_TYPES = new Set(['current-class', 'next-class', 'today', 'todo']);
@@ -515,6 +545,8 @@ ipcMain.handle('translator:translate', (_event, text, source, target) => transla
 ipcMain.handle('translator:capture-region', (event) => captureScreenRegion(event));
 
 app.whenReady().then(async () => {
+  if (isSquirrelEvent) return;
+  if (process.platform === 'win32') app.setAppUserModelId('cn.org.wlsash.wlsaplus');
   await restoreSavedSystemProxy().catch(() => {});
   await appSession().clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
   if (process.platform === 'win32' && app.isPackaged) {

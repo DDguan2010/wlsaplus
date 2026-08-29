@@ -52,8 +52,18 @@ export class TranslatorPage {
       const image = await this.service.captureRegion();
       if (!image) return;
       this.progress.set('Recognizing text...');
-      const { createWorker } = await import('tesseract.js');
-      const worker = await createWorker(['eng', 'chi_sim'], 1, { langPath: new URL('ocr', document.baseURI).toString().replace(/\/$/, ''), logger: (message) => { if (message.status === 'recognizing text') this.progress.set(`Recognizing ${Math.round(message.progress * 100)}%`); } });
+      type TesseractLoader = { createWorker: typeof import('tesseract.js').createWorker };
+      const loaded = await import('tesseract.js') as unknown as TesseractLoader & { default?: TesseractLoader };
+      const createWorker = typeof loaded.createWorker === 'function' ? loaded.createWorker : loaded.default?.createWorker;
+      if (!createWorker) throw new Error('The OCR engine could not be loaded.');
+      const ocrPath = new URL('ocr/', document.baseURI).toString();
+      const worker = await createWorker(['eng', 'chi_sim'], 1, {
+        workerPath: `${ocrPath}worker.min.js`,
+        corePath: ocrPath,
+        langPath: ocrPath,
+        workerBlobURL: false,
+        logger: (message) => { if (message.status === 'recognizing text') this.progress.set(`Recognizing ${Math.round(message.progress * 100)}%`); },
+      });
       try { this.input = (await worker.recognize(image)).data.text.trim(); } finally { await worker.terminate(); }
       if (this.input) {
         this.progress.set('Translating...');

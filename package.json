@@ -1,6 +1,7 @@
 {
   "name": "wlsaplus",
-  "version": "1.0.0",
+  "productName": "WLSAPlus",
+  "version": "1.0.1",
   "private": true,
   "description": "A local-first schedule and task app for WLSA students",
   "author": "WLSAPlus contributors",
