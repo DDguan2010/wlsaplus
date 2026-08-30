@@ -26,7 +26,7 @@ npm run android:build
 
 Open **Actions > Build and release > Run workflow**, enter a semantic version such as `1.2.0`, and run it. The workflow applies that version to the frontend, Android, Windows, and macOS packages, creates tag `v1.2.0`, and publishes the APK, Windows installer, and macOS DMG/ZIP to a GitHub Release. Pushing a `v*` tag directly is also supported.
 
-Normal pushes to `master` build downloadable test artifacts without creating a GitHub Release.
+Normal branch pushes do not run the release workflow.
 
 Optional signing secrets:
 
