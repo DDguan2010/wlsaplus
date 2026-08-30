@@ -36,6 +36,9 @@ function handleSquirrelEvent() {
 }
 
 const isSquirrelEvent = handleSquirrelEvent();
+const hasSingleInstanceLock = isSquirrelEvent || app.requestSingleInstanceLock();
+
+if (!hasSingleInstanceLock) app.quit();
 
 const execFileAsync = promisify(execFile);
 
@@ -456,6 +459,16 @@ function createMainWindow() {
   mainWindow.loadURL(appUrl());
 }
 
+function showMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    createMainWindow();
+    return;
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
 async function readJson(file, fallback) {
   try { return JSON.parse(await fs.readFile(file, 'utf8')); } catch { return fallback; }
 }
@@ -544,8 +557,14 @@ ipcMain.handle('vpn:disconnect', () => disconnectVpn());
 ipcMain.handle('translator:translate', (_event, text, source, target) => translateText(text, source, target));
 ipcMain.handle('translator:capture-region', (event) => captureScreenRegion(event));
 
+if (hasSingleInstanceLock && !isSquirrelEvent) {
+  app.on('second-instance', (_event, commandLine) => {
+    if (!commandLine.includes('--autostart')) showMainWindow();
+  });
+}
+
 app.whenReady().then(async () => {
-  if (isSquirrelEvent) return;
+  if (isSquirrelEvent || !hasSingleInstanceLock) return;
   if (process.platform === 'win32') app.setAppUserModelId('cn.org.wlsash.wlsaplus');
   await restoreSavedSystemProxy().catch(() => {});
   await appSession().clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
@@ -564,8 +583,8 @@ app.whenReady().then(async () => {
       createCardWindow(id, config.type, config.bounds);
     }
   }
-  if (!isAutostart || cards.size === 0) createMainWindow();
-  app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createMainWindow(); });
+  if (!isAutostart || cards.size === 0) showMainWindow();
+  app.on('activate', showMainWindow);
 });
 app.on('before-quit', (event) => {
   isQuitting = true;
