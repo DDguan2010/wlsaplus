@@ -20,8 +20,9 @@ contextBridge.exposeInMainWorld('wlsaplus', {
   },
   vpn: {
     status: () => ipcRenderer.invoke('vpn:status'),
-    connect: () => ipcRenderer.invoke('vpn:connect'),
+    connect: (mode) => ipcRenderer.invoke('vpn:connect', mode),
     disconnect: () => ipcRenderer.invoke('vpn:disconnect'),
+    restartElevated: (mode) => ipcRenderer.invoke('vpn:restart-elevated', mode),
     onStatus: (callback) => {
       const handler = (_event, status) => callback(status);
       ipcRenderer.on('vpn:status', handler);

@@ -56,12 +56,14 @@ export interface PlatformInfo {
 }
 
 export type VpnConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnecting' | 'delegated' | 'error' | 'unavailable';
+export type VpnConnectionMode = 'system-proxy' | 'full-tunnel';
 
 export interface VpnStatus {
   state: VpnConnectionState;
   message: string;
   connectedAt: string | null;
-  mode: 'system-proxy' | 'external-client' | 'unavailable';
+  mode: VpnConnectionMode | 'external-client' | 'unavailable';
+  requiresElevation?: boolean;
 }
 
 export interface TranslationResult {

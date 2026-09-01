@@ -5,6 +5,7 @@ import type {
   PlatformHttpResponse,
   PowerSchoolCredentials,
   TranslationResult,
+  VpnConnectionMode,
   VpnStatus,
 } from './models';
 
@@ -36,8 +37,9 @@ declare global {
       };
       vpn: {
         status(): Promise<VpnStatus>;
-        connect(): Promise<VpnStatus>;
+        connect(mode: VpnConnectionMode): Promise<VpnStatus>;
         disconnect(): Promise<VpnStatus>;
+        restartElevated(mode: VpnConnectionMode): Promise<VpnStatus>;
         onStatus(callback: (status: VpnStatus) => void): () => void;
       };
       translator: {
