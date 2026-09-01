@@ -36,7 +36,8 @@ export interface ScheduleSnapshot {
 
 export interface TodoItem {
   id: string;
-  text: string;
+  title: string;
+  details: string;
   createdAt: string;
 }
 

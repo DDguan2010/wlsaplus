@@ -18,7 +18,7 @@ const DEFAULT_SETTINGS: AppSettings = {
 @Injectable({ providedIn: 'root' })
 export class LocalStore {
   readonly schedule = signal(this.read<ScheduleSnapshot>('schedule', EMPTY_SCHEDULE));
-  readonly todos = signal(this.read<TodoItem[]>('todos', []));
+  readonly todos = signal(this.readTodos());
   readonly settings = signal(this.read<AppSettings>('settings', DEFAULT_SETTINGS));
   readonly hasSchedule = computed(() => this.schedule().sessions.length > 0);
 
@@ -26,7 +26,7 @@ export class LocalStore {
     window.addEventListener('storage', (event) => {
       if (event.storageArea !== localStorage || !event.key) return;
       if (event.key === this.key('schedule')) this.schedule.set(this.parse(event.newValue, EMPTY_SCHEDULE));
-      if (event.key === this.key('todos')) this.todos.set(this.parse(event.newValue, []));
+      if (event.key === this.key('todos')) this.todos.set(this.parseTodos(event.newValue));
       if (event.key === this.key('settings')) {
         this.settings.set(this.parse(event.newValue, DEFAULT_SETTINGS));
         this.applyTheme();
@@ -39,16 +39,27 @@ export class LocalStore {
     this.write('schedule', value);
   }
 
-  addTodo(text: string): void {
-    const trimmed = text.trim();
-    if (!trimmed) return;
+  addTodo(title: string, details = ''): void {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle) return;
     const value: TodoItem = {
       id: crypto.randomUUID(),
-      text: trimmed,
+      title: trimmedTitle,
+      details: details.trim(),
       createdAt: new Date().toISOString(),
     };
     this.todos.update((items) => [value, ...items]);
     this.write('todos', this.todos());
+  }
+
+  updateTodo(id: string, title: string, details = ''): boolean {
+    const trimmedTitle = title.trim();
+    if (!trimmedTitle || !this.todos().some((item) => item.id === id)) return false;
+    this.todos.update((items) => items.map((item) => item.id === id
+      ? { ...item, title: trimmedTitle, details: details.trim() }
+      : item));
+    this.write('todos', this.todos());
+    return true;
   }
 
   removeTodo(id: string): TodoItem | null {
@@ -90,6 +101,29 @@ export class LocalStore {
 
   private read<T>(name: string, fallback: T): T {
     return this.parse(localStorage.getItem(this.key(name)), fallback);
+  }
+
+  private readTodos(): TodoItem[] {
+    return this.parseTodos(localStorage.getItem(this.key('todos')));
+  }
+
+  private parseTodos(raw: string | null): TodoItem[] {
+    const values = this.parse<unknown>(raw, []);
+    if (!Array.isArray(values)) return [];
+    return values.flatMap((value) => {
+      if (!value || typeof value !== 'object') return [];
+      const item = value as Record<string, unknown>;
+      const title = typeof item['title'] === 'string'
+        ? item['title'].trim()
+        : typeof item['text'] === 'string' ? item['text'].trim() : '';
+      if (!title || typeof item['id'] !== 'string' || typeof item['createdAt'] !== 'string') return [];
+      return [{
+        id: item['id'],
+        title,
+        details: typeof item['details'] === 'string' ? item['details'].trim() : '',
+        createdAt: item['createdAt'],
+      }];
+    });
   }
 
   private parse<T>(raw: string | null, fallback: T): T {
