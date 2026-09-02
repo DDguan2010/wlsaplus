@@ -8,6 +8,7 @@ const path = require('node:path');
 const { promisify } = require('node:util');
 const { autoUpdater } = require('electron-updater');
 const { VPN_CONNECTION_MODES, buildVpnConfig } = require('./vpn-config.cjs');
+const { updateFeed } = require('./update-config.cjs');
 
 function handleSquirrelEvent() {
   if (process.platform !== 'win32') return false;
@@ -61,6 +62,7 @@ let vpnStatus = { state: 'idle', message: 'Ready', connectedAt: null, mode: 'sys
 let vpnProcessError = '';
 let quitAfterCleanup = false;
 let updateInstallRequested = false;
+let updateFeedSource = 'mirror';
 const vpnDnsCache = new Map();
 const updatesSupported = process.platform === 'win32' && app.isPackaged;
 let updateStatus = {
@@ -509,14 +511,26 @@ function updaterErrorMessage(error) {
   return 'The update service is temporarily unavailable.';
 }
 
+function configureUpdateFeed(source) {
+  autoUpdater.setFeedURL(updateFeed(source));
+  updateFeedSource = source;
+}
+
 async function checkForAppUpdate() {
   if (!updatesSupported) return updateStatus;
   if (updateStatus.state === 'checking' || updateStatus.state === 'downloading' || updateStatus.state === 'ready') return updateStatus;
   setUpdateStatus({ state: 'checking', message: 'Checking for updates...', percent: null });
   try {
+    configureUpdateFeed('mirror');
     await autoUpdater.checkForUpdates();
-  } catch (error) {
-    setUpdateStatus({ state: 'error', message: updaterErrorMessage(error), percent: null });
+  } catch {
+    setUpdateStatus({ state: 'checking', message: 'Update mirror unavailable. Trying GitHub...', percent: null });
+    try {
+      configureUpdateFeed('github');
+      await autoUpdater.checkForUpdates();
+    } catch (error) {
+      setUpdateStatus({ state: 'error', message: updaterErrorMessage(error), percent: null });
+    }
   }
   return updateStatus;
 }
@@ -527,7 +541,20 @@ async function downloadAppUpdate() {
   try {
     await autoUpdater.downloadUpdate();
   } catch (error) {
-    setUpdateStatus({ state: 'error', message: updaterErrorMessage(error), percent: null });
+    if (updateFeedSource !== 'mirror') {
+      setUpdateStatus({ state: 'error', message: updaterErrorMessage(error), percent: null });
+      return updateStatus;
+    }
+    const version = updateStatus.version;
+    setUpdateStatus({ state: 'checking', message: 'Update mirror unavailable. Trying GitHub...', percent: null });
+    try {
+      configureUpdateFeed('github');
+      await autoUpdater.checkForUpdates();
+      setUpdateStatus({ state: 'downloading', message: `Downloading WLSAPlus ${version}...`, version, percent: 0 });
+      await autoUpdater.downloadUpdate();
+    } catch (fallbackError) {
+      setUpdateStatus({ state: 'error', message: updaterErrorMessage(fallbackError), percent: null });
+    }
   }
   return updateStatus;
 }
@@ -550,6 +577,7 @@ async function installAppUpdate() {
 
 function configureAppUpdater() {
   if (!updatesSupported) return;
+  configureUpdateFeed('mirror');
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.on('update-available', (info) => setUpdateStatus({ state: 'available', message: `WLSAPlus ${info.version} is available.`, version: info.version, percent: null }));
