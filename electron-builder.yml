@@ -1,0 +1,39 @@
+appId: cn.org.wlsash.wlsaplus
+productName: WLSAPlus
+directories:
+  output: out-builder
+  buildResources: build
+asar: true
+files:
+  - dist/wlsaplus/browser/**/*
+  - electron/**/*
+  - package.json
+extraResources:
+  - from: build/vpn-core
+    to: vpn-core
+win:
+  executableName: WLSAPlus
+  icon: build/icon.ico
+  artifactName: WLSAPlus-${version}-Windows-Setup.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  deleteAppDataOnUninstall: false
+  displayLanguageSelector: false
+  installerIcon: build/icon.ico
+  include: build/installer.nsh
+  uninstallerIcon: build/icon.ico
+  shortcutName: WLSAPlus
+  uninstallDisplayName: WLSAPlus
+publish:
+  provider: github
+  owner: DDguan2010
+  repo: wlsaplus
+  releaseType: release

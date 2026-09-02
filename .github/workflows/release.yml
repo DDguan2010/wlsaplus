@@ -103,14 +103,14 @@ jobs:
       - run: npm ci
       - run: npm run version:apply
       - run: npm test
-      - run: npm run electron:make
+      - run: npm run electron:make:windows
       - shell: pwsh
         run: |
           New-Item -ItemType Directory -Path release-assets
-          $setup = Get-ChildItem out/make -Recurse -File -Filter *.exe | Select-Object -First 1
-          if (-not $setup) { throw 'Windows setup executable was not produced.' }
-          Copy-Item -LiteralPath $setup.FullName -Destination "release-assets/WLSAPlus-$env:WLSAPLUS_VERSION-Windows-Setup.exe"
-          Get-ChildItem out/make -Recurse -File -Filter *.nupkg | Copy-Item -Destination release-assets
+          $setup = Get-Item "out-builder/WLSAPlus-$env:WLSAPLUS_VERSION-Windows-Setup.exe"
+          Copy-Item -LiteralPath $setup.FullName -Destination release-assets
+          Get-ChildItem out-builder -File -Include latest.yml,*.blockmap | Copy-Item -Destination release-assets
+          if (-not (Test-Path release-assets/latest.yml)) { throw 'Windows update metadata was not produced.' }
       - uses: actions/upload-artifact@v4
         with:
           name: windows

@@ -12,6 +12,7 @@ import { LocalStore } from '../core/local-store.service';
 import type { DesktopCardType, ThemeMode } from '../core/models';
 import { PlatformService } from '../core/platform.service';
 import { PowerSchoolService } from '../core/powerschool.service';
+import { UpdateService } from '../core/update.service';
 import { ConfirmDialogComponent } from '../shared/text-dialog.component';
 import { BUILD_VERSION } from '../build-info';
 
@@ -39,6 +40,19 @@ import { BUILD_VERSION } from '../build-info';
         <section><h2 class="section-title">Windows Desktop Cards</h2><div class="settings-list surface"><div class="setting"><div><strong>Launch cards at startup</strong><span>Restore your desktop cards when Windows starts.</span></div><mat-slide-toggle [checked]="launchAtStartup()" (change)="setLaunchAtStartup($event.checked)"></mat-slide-toggle></div><div class="setting"><div><strong>Add a desktop card</strong><span>Cards stay behind normal app windows and do not appear in the taskbar.</span></div></div><div class="widget-actions">@for (card of cards; track card.type) { <button mat-stroked-button (click)="addCard(card.type)"><span class="material-symbols-rounded">{{ card.icon }}</span>{{ card.label }}</button> }</div></div></section>
       }
 
+      @if (platform.info.kind === 'electron' && platform.info.os === 'windows') {
+        <section><h2 class="section-title">Software updates</h2><div class="settings-list surface"><div class="setting update-setting"><div><strong>WLSAPlus {{ version }}</strong><span>{{ updater.status().message }}</span>@if (updater.status().state === 'downloading') { <div class="update-progress"><progress [value]="updater.status().percent ?? 0" max="100"></progress><span>{{ updater.status().percent ?? 0 }}%</span></div> }</div>
+          @switch (updater.status().state) {
+            @case ('available') { <button mat-flat-button (click)="updater.download()"><span class="material-symbols-rounded">download</span>Download update</button> }
+            @case ('ready') { <button mat-flat-button (click)="updater.install()"><span class="material-symbols-rounded">restart_alt</span>Restart and install</button> }
+            @case ('downloading') { <button mat-button disabled>Downloading</button> }
+            @case ('installing') { <button mat-button disabled>Installing</button> }
+            @case ('checking') { <button mat-button disabled>Checking</button> }
+            @default { <button mat-stroked-button (click)="updater.check()"><span class="material-symbols-rounded">refresh</span>Check for updates</button> }
+          }
+        </div></div></section>
+      }
+
       <section><h2 class="section-title">Local Data</h2><div class="settings-list surface danger-zone"><div class="setting"><div><strong>Clear this device</strong><span>Remove saved credentials, schedule, and tasks.</span></div><button mat-stroked-button (click)="clearData()">Clear data</button></div></div></section>
       <footer>WLSAPlus {{ version }} · Local-first student tools</footer>
     </div>
@@ -49,12 +63,14 @@ import { BUILD_VERSION } from '../build-info';
     .tuning-panel { padding: 18px; background: var(--app-surface-raised); } input { height: 48px; width: min(100%, 280px); padding: 0 12px; border: 1px solid var(--app-border); border-radius: 6px; background: var(--app-surface); color: var(--app-text); }
     .time-buttons, .widget-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; } .widget-actions { padding: 0 18px 18px; margin-top: 0; }
     .danger-zone button { color: #ba1a1a; } footer { padding: 34px 0 6px; color: var(--app-muted); text-align: center; font-size: 12px; }
+    .update-progress { width: min(100%, 360px); display: grid; grid-template-columns: minmax(0,1fr) 36px; align-items: center; gap: 9px; margin-top: 8px; color: var(--app-muted); font-size: 11px; } .update-progress progress { width: 100%; height: 7px; accent-color: var(--app-accent); }
     @media (max-width: 680px) { .setting { gap: 12px; } .setting > button { justify-self: start; } .setting > mat-slide-toggle { justify-self: end; } mat-button-toggle-group { width: 100%; } mat-button-toggle { flex: 1; } }
   `,
 })
 export class SettingsPage {
   readonly version = BUILD_VERSION;
   readonly store = inject(LocalStore); readonly clock = inject(ClockService); readonly platform = inject(PlatformService);
+  readonly updater = inject(UpdateService);
   private readonly service = inject(PowerSchoolService); private readonly router = inject(Router); private readonly snack = inject(MatSnackBar); private readonly dialog = inject(MatDialog);
   readonly syncing = signal(false);
   readonly launchAtStartup = signal(true);

@@ -5,6 +5,7 @@ import type {
   PlatformHttpResponse,
   PowerSchoolCredentials,
   TranslationResult,
+  UpdateStatus,
   VpnConnectionMode,
   VpnStatus,
 } from './models';
@@ -41,6 +42,13 @@ declare global {
         disconnect(): Promise<VpnStatus>;
         restartElevated(mode: VpnConnectionMode): Promise<VpnStatus>;
         onStatus(callback: (status: VpnStatus) => void): () => void;
+      };
+      updater: {
+        status(): Promise<UpdateStatus>;
+        check(): Promise<UpdateStatus>;
+        download(): Promise<UpdateStatus>;
+        install(): Promise<UpdateStatus>;
+        onStatus(callback: (status: UpdateStatus) => void): () => void;
       };
       translator: {
         translate(text: string, source: string, target: string): Promise<TranslationResult>;

@@ -67,6 +67,16 @@ export interface VpnStatus {
   requiresElevation?: boolean;
 }
 
+export type UpdateState = 'unsupported' | 'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'installing' | 'up-to-date' | 'error';
+
+export interface UpdateStatus {
+  state: UpdateState;
+  message: string;
+  currentVersion: string;
+  version: string | null;
+  percent: number | null;
+}
+
 export interface TranslationResult {
   text: string;
   detectedLanguage: string;

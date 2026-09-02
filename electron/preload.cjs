@@ -29,6 +29,17 @@ contextBridge.exposeInMainWorld('wlsaplus', {
       return () => ipcRenderer.removeListener('vpn:status', handler);
     },
   },
+  updater: {
+    status: () => ipcRenderer.invoke('updater:status'),
+    check: () => ipcRenderer.invoke('updater:check'),
+    download: () => ipcRenderer.invoke('updater:download'),
+    install: () => ipcRenderer.invoke('updater:install'),
+    onStatus: (callback) => {
+      const handler = (_event, status) => callback(status);
+      ipcRenderer.on('updater:status', handler);
+      return () => ipcRenderer.removeListener('updater:status', handler);
+    },
+  },
   translator: {
     translate: (text, source, target) => ipcRenderer.invoke('translator:translate', text, source, target),
     captureRegion: () => process.platform === 'win32'

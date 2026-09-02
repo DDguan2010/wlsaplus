@@ -6,6 +6,7 @@ const nodeHttps = require('node:https');
 const nodeNet = require('node:net');
 const path = require('node:path');
 const { promisify } = require('node:util');
+const { autoUpdater } = require('electron-updater');
 const { VPN_CONNECTION_MODES, buildVpnConfig } = require('./vpn-config.cjs');
 
 function handleSquirrelEvent() {
@@ -50,6 +51,7 @@ let mainWindow;
 let nextCardId = 1;
 let isQuitting = false;
 const isAutostart = process.argv.includes('--autostart');
+const prepareUpdateMode = process.argv.includes('--prepare-update');
 const vpnAutoConnectMode = process.argv.includes('--vpn-autoconnect=full-tunnel') ? 'full-tunnel' : null;
 const VPN_PORT = 17890;
 const VPN_SUBSCRIPTION_URL = 'https://vpn.02studio.xyz/api/subscribe?format=ss';
@@ -58,7 +60,16 @@ let vpnDisconnecting = false;
 let vpnStatus = { state: 'idle', message: 'Ready', connectedAt: null, mode: 'system-proxy' };
 let vpnProcessError = '';
 let quitAfterCleanup = false;
+let updateInstallRequested = false;
 const vpnDnsCache = new Map();
+const updatesSupported = process.platform === 'win32' && app.isPackaged;
+let updateStatus = {
+  state: updatesSupported ? 'idle' : 'unsupported',
+  message: updatesSupported ? 'Ready to check for updates.' : 'Automatic updates are available in the installed Windows app.',
+  currentVersion: app.getVersion(),
+  version: null,
+  percent: null,
+};
 
 const preload = path.join(__dirname, 'preload.cjs');
 const credentialFile = () => path.join(app.getPath('userData'), 'credentials.bin');
@@ -213,6 +224,14 @@ async function writeVpnConfig(profile, mode) {
   await fs.writeFile(vpnConfigFile(), JSON.stringify(config, null, 2), { mode: 0o600 });
 }
 
+function setUpdateStatus(patch) {
+  updateStatus = { ...updateStatus, ...patch };
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) win.webContents.send('updater:status', updateStatus);
+  }
+  return updateStatus;
+}
+
 async function validateVpnConfig(core) {
   try {
     await execFileAsync(core, ['check', '-c', vpnConfigFile()], { windowsHide: true });
@@ -274,20 +293,54 @@ async function waitForPort(port, timeoutMs = 10_000) {
   throw new Error('The VPN core did not start in time.');
 }
 
+async function waitForFullTunnelInterface() {
+  if (process.platform !== 'win32') return;
+  const script = "$deadline = [DateTime]::UtcNow.AddSeconds(12); do { $adapter = Get-NetAdapter -IncludeHidden -Name 'WLSAPlus' -ErrorAction SilentlyContinue; $dns = @((Get-DnsClientServerAddress -InterfaceAlias 'WLSAPlus' -AddressFamily IPv4 -ErrorAction SilentlyContinue).ServerAddresses); if ($adapter.Status -eq 'Up' -and $dns.Count -gt 0) { exit 0 }; Start-Sleep -Milliseconds 300 } while ([DateTime]::UtcNow -lt $deadline); exit 1";
+  try {
+    await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 15_000 });
+  } catch {
+    throw new Error('02VPN could not finish creating the Windows full-device tunnel.');
+  }
+}
+
+async function probeVpnUrls(probeSession, urls, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await Promise.any(urls.map(async (url) => {
+      const response = await probeSession.fetch(url, { cache: 'no-store', signal: controller.signal });
+      if (!response.ok && response.status !== 204) throw new Error(`HTTP ${response.status}`);
+      return response.status;
+    }));
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+  }
+}
+
 async function verifyVpnConnection(mode) {
   const probeSession = session.fromPartition('wlsaplus-vpn-probe');
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12_000);
   await probeSession.setProxy(mode === 'full-tunnel'
     ? { mode: 'direct' }
     : { mode: 'fixed_servers', proxyRules: `http=127.0.0.1:${VPN_PORT};https=127.0.0.1:${VPN_PORT}` });
   try {
-    const response = await probeSession.fetch('https://www.gstatic.com/generate_204', { cache: 'no-store', signal: controller.signal });
-    if (response.status !== 204 && !response.ok) throw new Error(`VPN health check returned ${response.status}.`);
-  } catch (error) {
-    throw new Error(error?.name === 'AbortError' ? '02VPN did not respond in time.' : `Could not reach the internet through 02VPN ${mode === 'full-tunnel' ? 'full-device mode' : 'proxy'}.`);
+    const urls = [
+      'https://www.gstatic.com/generate_204',
+      'https://www.cloudflare.com/cdn-cgi/trace',
+      'https://weixin.qq.com/',
+    ];
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await probeSession.closeAllConnections().catch(() => {});
+      await probeSession.clearHostResolverCache().catch(() => {});
+      try {
+        await probeVpnUrls(probeSession, urls, 10_000);
+        return;
+      } catch {
+        if (attempt < 2) await delay(800 * (attempt + 1));
+      }
+    }
+    throw new Error(`02VPN started, but ${mode === 'full-tunnel' ? 'tunneled DNS' : 'the proxy'} did not become ready. Please reconnect.`);
   } finally {
-    clearTimeout(timeout);
     await probeSession.setProxy({ mode: 'direct' }).catch(() => {});
     await probeSession.closeAllConnections().catch(() => {});
   }
@@ -424,6 +477,7 @@ async function connectVpn(requestedMode = 'system-proxy') {
       }
     });
     await waitForPort(VPN_PORT);
+    if (mode === 'full-tunnel') await waitForFullTunnelInterface();
     await verifyVpnConnection(mode);
     if (mode === 'system-proxy') await enableSystemProxy();
     return setVpnStatus({ state: 'connected', message: mode === 'full-tunnel' ? 'Full device protected by 02VPN' : 'Web traffic protected by 02VPN', connectedAt: new Date().toISOString(), mode, requiresElevation: false });
@@ -447,6 +501,67 @@ async function disconnectVpn() {
   await stopVpnProcess();
   vpnDisconnecting = false;
   return setVpnStatus({ state: 'idle', message: 'Ready', connectedAt: null, mode, requiresElevation: false });
+}
+
+function updaterErrorMessage(error) {
+  const detail = error instanceof Error ? error.message : String(error || '');
+  if (/net::|network|internet|ENOTFOUND|ETIMEDOUT|ECONN/u.test(detail)) return 'Could not check for updates. Check your internet connection.';
+  return 'The update service is temporarily unavailable.';
+}
+
+async function checkForAppUpdate() {
+  if (!updatesSupported) return updateStatus;
+  if (updateStatus.state === 'checking' || updateStatus.state === 'downloading' || updateStatus.state === 'ready') return updateStatus;
+  setUpdateStatus({ state: 'checking', message: 'Checking for updates...', percent: null });
+  try {
+    await autoUpdater.checkForUpdates();
+  } catch (error) {
+    setUpdateStatus({ state: 'error', message: updaterErrorMessage(error), percent: null });
+  }
+  return updateStatus;
+}
+
+async function downloadAppUpdate() {
+  if (!updatesSupported || updateStatus.state !== 'available') return updateStatus;
+  setUpdateStatus({ state: 'downloading', message: `Downloading WLSAPlus ${updateStatus.version}...`, percent: 0 });
+  try {
+    await autoUpdater.downloadUpdate();
+  } catch (error) {
+    setUpdateStatus({ state: 'error', message: updaterErrorMessage(error), percent: null });
+  }
+  return updateStatus;
+}
+
+async function cleanupBeforeUpdate() {
+  if (updateInstallRequested) return;
+  updateInstallRequested = true;
+  isQuitting = true;
+  if (vpnProcess || vpnStatus.state === 'connected') await disconnectVpn().catch(() => {});
+  quitAfterCleanup = true;
+}
+
+async function installAppUpdate() {
+  if (!updatesSupported || updateStatus.state !== 'ready') return updateStatus;
+  setUpdateStatus({ state: 'installing', message: 'Closing WLSAPlus and installing the update...', percent: 100 });
+  await cleanupBeforeUpdate();
+  autoUpdater.quitAndInstall(false, true);
+  return updateStatus;
+}
+
+function configureAppUpdater() {
+  if (!updatesSupported) return;
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = false;
+  autoUpdater.on('update-available', (info) => setUpdateStatus({ state: 'available', message: `WLSAPlus ${info.version} is available.`, version: info.version, percent: null }));
+  autoUpdater.on('update-not-available', () => setUpdateStatus({ state: 'up-to-date', message: 'WLSAPlus is up to date.', version: null, percent: null }));
+  autoUpdater.on('download-progress', (progress) => {
+    const percent = Math.max(0, Math.min(100, Math.round(progress.percent)));
+    setUpdateStatus({ state: 'downloading', message: `Downloading update: ${percent}%`, percent });
+  });
+  autoUpdater.on('update-downloaded', (info) => setUpdateStatus({ state: 'ready', message: `WLSAPlus ${info.version} is ready to install.`, version: info.version, percent: 100 }));
+  autoUpdater.on('error', (error) => {
+    if (updateStatus.state !== 'installing') setUpdateStatus({ state: 'error', message: updaterErrorMessage(error), percent: null });
+  });
 }
 
 async function captureScreenRegion(event) {
@@ -634,11 +749,19 @@ ipcMain.handle('vpn:status', () => vpnStatus);
 ipcMain.handle('vpn:connect', (_event, mode) => connectVpn(mode));
 ipcMain.handle('vpn:disconnect', () => disconnectVpn());
 ipcMain.handle('vpn:restart-elevated', (_event, mode) => restartVpnElevated(normalizeVpnMode(mode)));
+ipcMain.handle('updater:status', () => updateStatus);
+ipcMain.handle('updater:check', () => checkForAppUpdate());
+ipcMain.handle('updater:download', () => downloadAppUpdate());
+ipcMain.handle('updater:install', () => installAppUpdate());
 ipcMain.handle('translator:translate', (_event, text, source, target) => translateText(text, source, target));
 ipcMain.handle('translator:capture-region', (event) => captureScreenRegion(event));
 
 if (hasSingleInstanceLock && !isSquirrelEvent) {
   app.on('second-instance', (_event, commandLine) => {
+    if (commandLine.includes('--prepare-update')) {
+      void cleanupBeforeUpdate().finally(() => app.quit());
+      return;
+    }
     if (!commandLine.includes('--autostart')) showMainWindow();
   });
 }
@@ -646,6 +769,12 @@ if (hasSingleInstanceLock && !isSquirrelEvent) {
 app.whenReady().then(async () => {
   if (isSquirrelEvent || !hasSingleInstanceLock) return;
   if (process.platform === 'win32') app.setAppUserModelId('cn.org.wlsash.wlsaplus');
+  if (prepareUpdateMode) {
+    await cleanupBeforeUpdate();
+    app.quit();
+    return;
+  }
+  configureAppUpdater();
   await restoreSavedSystemProxy().catch(() => {});
   await appSession().clearStorageData({ storages: ['serviceworkers', 'cachestorage'] }).catch(() => {});
   if (process.platform === 'win32' && app.isPackaged) {
@@ -665,6 +794,10 @@ app.whenReady().then(async () => {
   }
   if (!isAutostart || cards.size === 0 || vpnAutoConnectMode) showMainWindow(vpnAutoConnectMode ? 'tools/vpn' : '');
   if (vpnAutoConnectMode) void connectVpn(vpnAutoConnectMode);
+  if (updatesSupported && !vpnAutoConnectMode) {
+    const updateTimer = setTimeout(() => void checkForAppUpdate(), 8_000);
+    updateTimer.unref();
+  }
   app.on('activate', showMainWindow);
 });
 app.on('before-quit', (event) => {
