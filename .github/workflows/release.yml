@@ -109,7 +109,7 @@ jobs:
           New-Item -ItemType Directory -Path release-assets
           $setup = Get-Item "out-builder/WLSAPlus-$env:WLSAPLUS_VERSION-Windows-Setup.exe"
           Copy-Item -LiteralPath $setup.FullName -Destination release-assets
-          Get-ChildItem out-builder -File -Include latest.yml,*.blockmap | Copy-Item -Destination release-assets
+          Get-ChildItem out-builder -File | Where-Object { $_.Name -eq 'latest.yml' -or $_.Extension -eq '.blockmap' } | Copy-Item -Destination release-assets
           if (-not (Test-Path release-assets/latest.yml)) { throw 'Windows update metadata was not produced.' }
       - uses: actions/upload-artifact@v4
         with:
