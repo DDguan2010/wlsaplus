@@ -396,7 +396,7 @@ async function connectVpn(requestedMode = 'system-proxy') {
     return setVpnStatus({ state: 'error', message: 'Full-device mode is currently available on Windows only.', connectedAt: null, mode, requiresElevation: false });
   }
   if (mode === 'full-tunnel' && !(await isWindowsAdministrator())) {
-    return setVpnStatus({ state: 'error', message: 'Full-device mode requires administrator access.', connectedAt: null, mode, requiresElevation: true });
+    return restartVpnElevated(mode);
   }
   setVpnStatus({ state: 'connecting', message: `Connecting 02VPN ${mode === 'full-tunnel' ? 'full-device tunnel' : 'web proxy'}...`, connectedAt: null, mode, requiresElevation: false });
   try {

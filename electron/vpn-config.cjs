@@ -50,7 +50,12 @@ function buildVpnConfig(profile, mode, proxyPort) {
       strict_route: true,
       stack: 'mixed',
     });
-    config.route.rules = [{ protocol: 'dns', action: 'hijack-dns' }];
+    config.route.rules = [{
+      inbound: ['full-tunnel'],
+      network: ['tcp', 'udp'],
+      port: 53,
+      action: 'hijack-dns',
+    }];
     config.route.default_domain_resolver = 'tunnel-dns';
   }
 

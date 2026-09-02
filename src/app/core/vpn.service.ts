@@ -24,7 +24,16 @@ export class VpnService {
   async connect(): Promise<void> {
     if (window.wlsaplus) {
       this.status.set({ ...this.status(), state: 'connecting', message: 'Connecting to 02VPN...', mode: this.mode(), requiresElevation: false });
-      this.applyStatus(await window.wlsaplus.vpn.connect(this.mode()));
+      try {
+        this.applyStatus(await window.wlsaplus.vpn.connect(this.mode()));
+      } catch (error) {
+        this.status.set({
+          ...this.status(),
+          state: 'error',
+          message: error instanceof Error ? error.message : 'Could not request administrator access.',
+          requiresElevation: this.mode() === 'full-tunnel',
+        });
+      }
       return;
     }
     if (this.platform.info.kind === 'android') {

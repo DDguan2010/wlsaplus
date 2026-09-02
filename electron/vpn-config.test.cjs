@@ -28,7 +28,12 @@ test('full tunnel mode captures system routes and DNS', () => {
   assert.equal(tun.auto_route, true);
   assert.equal(tun.strict_route, true);
   assert.deepEqual(tun.address, ['172.19.0.1/30', 'fdfe:dcba:9876::1/126']);
-  assert.deepEqual(config.route.rules, [{ protocol: 'dns', action: 'hijack-dns' }]);
+  assert.deepEqual(config.route.rules, [{
+    inbound: ['full-tunnel'],
+    network: ['tcp', 'udp'],
+    port: 53,
+    action: 'hijack-dns',
+  }]);
   assert.equal(config.dns.servers[0].detour, '02vpn');
 });
 
