@@ -3,10 +3,6 @@ main = "src/worker.js"
 compatibility_date = "2026-09-03"
 workers_dev = false
 
-routes = [
-  { pattern = "apiwlsaplus.02studio.xyz", custom_domain = true }
-]
-
 [vars]
 ALLOWED_ORIGINS = "https://wlsap.02studio.xyz"
 ALLOWED_PATH_PREFIXES = "/public/,/guardian/"
