@@ -70,12 +70,12 @@ test('edge handler applies CORS and forwards a safe path to the session object',
   };
   const request = new Request(
     'https://apiwlsaplus.02studio.xyz/api/powerschool/guardian/myschedule.html?week=1',
-    { headers: { origin: 'https://wlsa.02studio.xyz' } },
+    { headers: { origin: 'https://wlsap.02studio.xyz' } },
   );
 
   const response = await worker.fetch(request, env);
   assert.equal(response.status, 200);
-  assert.equal(response.headers.get('access-control-allow-origin'), 'https://wlsa.02studio.xyz');
+  assert.equal(response.headers.get('access-control-allow-origin'), 'https://wlsap.02studio.xyz');
   assert.equal(response.headers.get('access-control-allow-credentials'), 'true');
   assert.match(response.headers.get('set-cookie'), /HttpOnly; Secure; SameSite=Strict/);
   const internalUrl = new URL(forwardedRequest.url);
@@ -104,7 +104,7 @@ test('edge handler forwards POST bodies and content types', async () => {
     {
       method: 'POST',
       headers: {
-        origin: 'https://wlsa.02studio.xyz',
+        origin: 'https://wlsap.02studio.xyz',
         'content-type': 'application/x-www-form-urlencoded',
       },
       body: 'account=student&pw=secret',

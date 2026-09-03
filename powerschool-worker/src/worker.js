@@ -1,7 +1,7 @@
 const API_PREFIX = '/api/powerschool';
 const UPSTREAM_ORIGIN = 'https://ps.wlsash.org.cn';
 const SESSION_COOKIE = '__Host-wlsaplus_ps';
-const DEFAULT_ALLOWED_ORIGINS = ['https://wlsa.02studio.xyz'];
+const DEFAULT_ALLOWED_ORIGINS = ['https://wlsap.02studio.xyz'];
 const DEFAULT_ALLOWED_PATH_PREFIXES = ['/public/', '/guardian/'];
 const DEFAULT_ALLOWED_METHODS = ['GET', 'HEAD', 'POST'];
 const DEFAULT_SESSION_TTL_SECONDS = 30 * 60;

@@ -8,7 +8,7 @@ routes = [
 ]
 
 [vars]
-ALLOWED_ORIGINS = "https://wlsa.02studio.xyz"
+ALLOWED_ORIGINS = "https://wlsap.02studio.xyz"
 ALLOWED_PATH_PREFIXES = "/public/,/guardian/"
 ALLOWED_METHODS = "GET,HEAD,POST"
 SESSION_TTL_SECONDS = "1800"

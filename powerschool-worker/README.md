@@ -37,6 +37,6 @@ await fetch('https://apiwlsaplus.02studio.xyz/api/powerschool/logout', {
 });
 ```
 
-Only `https://wlsa.02studio.xyz` is allowed by default. For local development, temporarily add the exact local origin to `ALLOWED_ORIGINS`, separated by a comma. Do not use `*` with credentialed requests.
+Only `https://wlsap.02studio.xyz` is allowed by default. For local development, temporarily add the exact local origin to `ALLOWED_ORIGINS`, separated by a comma. Do not use `*` with credentialed requests.
 
 Routes are restricted to `/public/` and `/guardian/`. Add another narrow prefix to `ALLOWED_PATH_PREFIXES` only when the app actually needs it. Configure an IP-based Cloudflare rate-limit rule for the custom domain in addition to the included per-session limit.
