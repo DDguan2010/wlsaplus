@@ -7,8 +7,10 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { ClockService } from '../core/clock.service';
 import { LocalStore } from '../core/local-store.service';
+import { todoDeadlineProgress } from '../core/models';
 import type { ClassSession, TodoItem } from '../core/models';
 import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dialog.component';
+import type { TaskDialogResult } from '../shared/text-dialog.component';
 
 @Component({
   selector: 'app-home-page',
@@ -37,10 +39,12 @@ import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dial
           @for (todo of store.todos(); track todo.id) {
             <div class="todo-row" [class.expanded]="expandedTodoId() === todo.id">
               <button class="todo-circle" (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"></button>
-              <button class="todo-content" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id">
-                <strong>{{ todo.title }}</strong>
-                @if (expandedTodoId() === todo.id) { <span>{{ todo.details || 'No additional information.' }}</span> }
-              </button>
+              <div class="todo-main"><button class="todo-content" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id">
+                  <strong>{{ todo.title }}</strong>
+                  @if (expandedTodoId() === todo.id) { <span>{{ todo.details || 'No additional information.' }}</span> }
+                </button>
+                @if (todo.endAt) { <div class="todo-deadline" [class.overdue]="todoProgress(todo) >= 100"><div class="deadline-track"><span [style.width.%]="todoProgress(todo)"></span></div><time>Ends {{ todo.endAt | date:'MMM d, HH:mm' }}</time></div> }
+                </div>
               <div class="todo-actions">
                 <button mat-icon-button (click)="editTodo(todo)" [attr.aria-label]="'Edit ' + todo.title"><span class="material-symbols-rounded">edit</span></button>
                 <button mat-icon-button (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"><span class="material-symbols-rounded">delete</span></button>
@@ -71,7 +75,8 @@ import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dial
     .section-heading h2 { margin: 0; color: var(--app-text); font-size: 22px; } .section-heading span { color: var(--app-muted); font-size: 13px; }
     .todo-list { overflow: hidden; } .todo-row { width: 100%; min-height: 62px; padding: 8px 10px 8px 18px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--app-border); background: transparent; color: var(--app-text); }
     .todo-row:last-child { border-bottom: 0; } .todo-circle { width: 19px; height: 19px; flex: 0 0 19px; padding: 0; border: 2px solid var(--app-muted); border-radius: 50%; background: transparent; cursor: pointer; } .todo-circle:hover { border-color: var(--app-accent); background: var(--app-accent-soft); }
-    .todo-content { min-width: 0; flex: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; } .todo-content strong { width: 100%; overflow-wrap: anywhere; font-weight: 500; } .todo-content > span { color: var(--app-muted); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .todo-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 7px; } .todo-content { width: 100%; min-width: 0; flex: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; } .todo-content strong { width: 100%; overflow-wrap: anywhere; font-weight: 500; } .todo-content > span { color: var(--app-muted); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .todo-deadline { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; } .deadline-track { height: 4px; overflow: hidden; border-radius: 2px; background: var(--app-surface-raised); } .deadline-track span { display: block; height: 100%; background: var(--app-accent); } .todo-deadline time { color: var(--app-muted); font-size: 11px; white-space: nowrap; } .todo-deadline.overdue time { color: #ba1a1a; }
     .todo-actions { display: flex; flex: 0 0 auto; } .todo-actions button { width: 40px; height: 40px; color: var(--app-muted); } .todo-actions .material-symbols-rounded { width: 20px; height: 20px; font-size: 20px; } .todo-actions button:hover { color: var(--app-text); }
     .compact { min-height: 130px; } .compact .material-symbols-rounded { font-size: 32px; }
     @media (max-width: 580px) { .class-card { min-height: 400px; padding: 22px; } h2 { margin-top: 38px; } .facts { align-items: flex-start; flex-direction: column; gap: 10px; margin: 22px 0 30px; } .todo-row { gap: 10px; padding-left: 14px; } .todo-actions button { width: 36px; height: 40px; } }
@@ -104,13 +109,13 @@ export class HomePage {
   });
   duration(session: ClassSession): number { return Math.round((new Date(session.endsAt).getTime() - new Date(session.startsAt).getTime()) / 60_000); }
   addTodo(): void {
-    this.dialog.open(TextDialogComponent, { data: { mode: 'add' } }).afterClosed().subscribe((value: { title: string; details: string } | undefined) => {
-      if (value) this.store.addTodo(value.title, value.details);
+    this.dialog.open(TextDialogComponent, { data: { mode: 'add' } }).afterClosed().subscribe((value: TaskDialogResult | undefined) => {
+      if (value) this.store.addTodo(value.title, value.details, value.endAt);
     });
   }
   editTodo(todo: TodoItem): void {
-    this.dialog.open(TextDialogComponent, { data: { mode: 'edit', title: todo.title, details: todo.details } }).afterClosed().subscribe((value: { title: string; details: string } | undefined) => {
-      if (value) this.store.updateTodo(todo.id, value.title, value.details);
+    this.dialog.open(TextDialogComponent, { data: { mode: 'edit', title: todo.title, details: todo.details, endAt: todo.endAt } }).afterClosed().subscribe((value: TaskDialogResult | undefined) => {
+      if (value) this.store.updateTodo(todo.id, value.title, value.details, value.endAt);
     });
   }
   toggleTodo(id: string): void { this.expandedTodoId.update((current) => current === id ? null : id); }
@@ -121,4 +126,5 @@ export class HomePage {
       this.snack.open('Task deleted', 'Undo', { duration: 4500 }).onAction().subscribe(() => this.store.restoreTodo(removed));
     });
   }
+  todoProgress(todo: TodoItem): number { return todoDeadlineProgress(todo, this.clock.now().getTime()); }
 }

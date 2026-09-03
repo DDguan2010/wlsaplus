@@ -1,4 +1,5 @@
 import { Injectable, computed, signal } from '@angular/core';
+import { normalizeTodoEndAt } from './models';
 import type { AppSettings, ScheduleSnapshot, TodoItem } from './models';
 
 const EMPTY_SCHEDULE: ScheduleSnapshot = {
@@ -39,7 +40,7 @@ export class LocalStore {
     this.write('schedule', value);
   }
 
-  addTodo(title: string, details = ''): void {
+  addTodo(title: string, details = '', endAt: string | null = null): void {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
     const value: TodoItem = {
@@ -47,16 +48,17 @@ export class LocalStore {
       title: trimmedTitle,
       details: details.trim(),
       createdAt: new Date().toISOString(),
+      endAt: normalizeTodoEndAt(endAt),
     };
     this.todos.update((items) => [value, ...items]);
     this.write('todos', this.todos());
   }
 
-  updateTodo(id: string, title: string, details = ''): boolean {
+  updateTodo(id: string, title: string, details = '', endAt?: string | null): boolean {
     const trimmedTitle = title.trim();
     if (!trimmedTitle || !this.todos().some((item) => item.id === id)) return false;
     this.todos.update((items) => items.map((item) => item.id === id
-      ? { ...item, title: trimmedTitle, details: details.trim() }
+      ? { ...item, title: trimmedTitle, details: details.trim(), endAt: endAt === undefined ? item.endAt : normalizeTodoEndAt(endAt) }
       : item));
     this.write('todos', this.todos());
     return true;
@@ -122,6 +124,7 @@ export class LocalStore {
         title,
         details: typeof item['details'] === 'string' ? item['details'].trim() : '',
         createdAt: item['createdAt'],
+        endAt: normalizeTodoEndAt(item['endAt']),
       }];
     });
   }

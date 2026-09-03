@@ -39,6 +39,22 @@ export interface TodoItem {
   title: string;
   details: string;
   createdAt: string;
+  endAt: string | null;
+}
+
+export function normalizeTodoEndAt(value: unknown): string | null {
+  if (typeof value !== 'string' || !value.trim()) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+export function todoDeadlineProgress(todo: Pick<TodoItem, 'createdAt' | 'endAt'>, now = Date.now()): number {
+  if (!todo.endAt) return 0;
+  const start = Date.parse(todo.createdAt);
+  const end = Date.parse(todo.endAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return 0;
+  if (end <= start) return now >= end ? 100 : 0;
+  return Math.min(100, Math.max(0, ((now - start) / (end - start)) * 100));
 }
 
 export interface AppSettings {

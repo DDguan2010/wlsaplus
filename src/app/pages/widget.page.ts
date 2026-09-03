@@ -5,8 +5,10 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClockService } from '../core/clock.service';
 import { LocalStore } from '../core/local-store.service';
+import { todoDeadlineProgress } from '../core/models';
 import type { TodoItem } from '../core/models';
 import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dialog.component';
+import type { TaskDialogResult } from '../shared/text-dialog.component';
 
 @Component({
   selector: 'app-widget-page', imports: [DatePipe, MatDialogModule, MatTooltipModule],
@@ -19,7 +21,7 @@ import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dial
           @for (todo of store.todos(); track todo.id) {
             <div class="todo" [class.expanded]="expandedTodoId() === todo.id">
               <button class="todo-circle" (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"></button>
-              <button class="todo-copy" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id"><strong>{{ todo.title }}</strong>@if (expandedTodoId() === todo.id) { <span>{{ todo.details || 'No additional information.' }}</span> }</button>
+              <div class="todo-main"><button class="todo-copy" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id"><strong>{{ todo.title }}</strong>@if (expandedTodoId() === todo.id) { <span>{{ todo.details || 'No additional information.' }}</span> }</button>@if (todo.endAt) { <div class="todo-deadline" [class.overdue]="todoProgress(todo) >= 100"><div class="deadline-track"><span [style.width.%]="todoProgress(todo)"></span></div><time>Ends {{ todo.endAt | date:'MMM d, HH:mm' }}</time></div> }</div>
               <div class="todo-actions"><button (click)="editTodo(todo)" [attr.aria-label]="'Edit ' + todo.title"><span class="material-symbols-rounded">edit</span></button><button (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"><span class="material-symbols-rounded">delete</span></button></div>
               <time>{{ todo.createdAt | date:'MMM d' }}</time>
             </div>
@@ -51,8 +53,9 @@ import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dial
     .next { min-height: 42px; margin-top: 14px; padding-top: 10px; display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 9px; border-top: 1px solid var(--app-border); font-size: 11px; } .next span, .next time { color: var(--app-muted); } .next strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .title-row { margin-top: 16px; display: flex; align-items: end; justify-content: space-between; } .title-row h1 { margin-bottom: 0; } .count { font-size: 26px; color: var(--app-accent); }
     .row, .todo { min-height: 54px; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--app-border); font-size: 12px; } .row > time { width: 42px; display: flex; flex-direction: column; gap: 2px; color: var(--app-text); } .row > time span, .row > div span { color: var(--app-muted); font-size: 10px; } .row > div { min-width: 0; display: flex; flex-direction: column; gap: 3px; } .row > div strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .todo { padding: 5px 0; } .todo-circle { width: 15px; height: 15px; flex: 0 0 15px; padding: 0; border: 1px solid var(--app-muted); border-radius: 50%; background: transparent; cursor: pointer; } .todo-copy { min-width: 0; flex: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--app-text); text-align: left; cursor: pointer; } .todo-copy strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .todo-copy span { line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; } .todo.expanded .todo-copy strong { white-space: normal; overflow-wrap: anywhere; }
-    .todo-actions { display: flex; flex-direction: row !important; gap: 0 !important; } .todo-actions button { width: 26px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--app-muted); cursor: pointer; } .todo-actions .material-symbols-rounded { width: 16px; height: 16px; font-size: 16px; } .todo time { flex: 0 0 auto; color: var(--app-muted); font-size: 10px; }
+    .todo { padding: 5px 0; } .todo-circle { width: 15px; height: 15px; flex: 0 0 15px; padding: 0; border: 1px solid var(--app-muted); border-radius: 50%; background: transparent; cursor: pointer; } .todo-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 5px; } .todo-copy { width: 100%; min-width: 0; flex: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 4px; padding: 0; border: 0; background: transparent; color: var(--app-text); text-align: left; cursor: pointer; } .todo-copy strong { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .todo-copy span { line-height: 1.35; white-space: pre-wrap; overflow-wrap: anywhere; } .todo.expanded .todo-copy strong { white-space: normal; overflow-wrap: anywhere; }
+    .todo-deadline { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 7px; } .deadline-track { height: 3px; overflow: hidden; border-radius: 2px; background: var(--app-surface-raised); } .deadline-track span { display: block; height: 100%; background: var(--app-accent); } .todo-deadline time { color: var(--app-muted); font-size: 9px; white-space: nowrap; } .todo-deadline.overdue time { color: #ba1a1a; }
+    .todo-actions { display: flex; flex-direction: row !important; gap: 0 !important; } .todo-actions button { width: 26px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--app-muted); cursor: pointer; } .todo-actions .material-symbols-rounded { width: 16px; height: 16px; font-size: 16px; } .todo > time { flex: 0 0 auto; color: var(--app-muted); font-size: 10px; }
     .resize-grip { position: absolute; right: 1px; bottom: 1px; width: 18px; height: 18px; color: var(--app-muted); font-size: 16px; opacity: .55; transform: rotate(-45deg); pointer-events: none; }
   `,
 })
@@ -78,8 +81,8 @@ export class WidgetPage {
   readonly today = computed(() => { const key = this.clock.now().toLocaleDateString('en-CA'); return this.store.schedule().sessions.filter((s) => s.startsAt.slice(0,10) === key); });
   toggleTodo(id: string): void { this.expandedTodoId.update((current) => current === id ? null : id); }
   editTodo(todo: TodoItem): void {
-    this.dialog.open(TextDialogComponent, { data: { mode: 'edit', title: todo.title, details: todo.details } }).afterClosed().subscribe((value: { title: string; details: string } | undefined) => {
-      if (value) this.store.updateTodo(todo.id, value.title, value.details);
+    this.dialog.open(TextDialogComponent, { data: { mode: 'edit', title: todo.title, details: todo.details, endAt: todo.endAt } }).afterClosed().subscribe((value: TaskDialogResult | undefined) => {
+      if (value) this.store.updateTodo(todo.id, value.title, value.details, value.endAt);
     });
   }
   deleteTodo(todo: TodoItem): void {
@@ -88,5 +91,6 @@ export class WidgetPage {
     });
   }
   closeAll(): void { void window.wlsaplus?.desktopCards.closeAll(); }
+  todoProgress(todo: TodoItem): number { return todoDeadlineProgress(todo, this.clock.now().getTime()); }
   close(): void { window.close(); }
 }
