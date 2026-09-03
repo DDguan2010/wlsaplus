@@ -33,6 +33,7 @@ declare global {
         list(): Promise<DesktopCardInfo[]>;
         add(type: DesktopCardType): Promise<DesktopCardInfo>;
         remove(id: number): Promise<void>;
+        closeAll(): Promise<number>;
         getSettings(): Promise<DesktopCardSettings>;
         setSettings(value: DesktopCardSettings): Promise<void>;
       };

@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('wlsaplus', {
     list: () => ipcRenderer.invoke('cards:list'),
     add: (type) => ipcRenderer.invoke('cards:add', type),
     remove: (id) => ipcRenderer.invoke('cards:remove', id),
+    closeAll: () => ipcRenderer.invoke('cards:close-all'),
     getSettings: () => ipcRenderer.invoke('cards:get-settings'),
     setSettings: (value) => ipcRenderer.invoke('cards:set-settings', value),
   },

@@ -2,16 +2,17 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClockService } from '../core/clock.service';
 import { LocalStore } from '../core/local-store.service';
 import type { TodoItem } from '../core/models';
 import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dialog.component';
 
 @Component({
-  selector: 'app-widget-page', imports: [DatePipe, MatDialogModule],
+  selector: 'app-widget-page', imports: [DatePipe, MatDialogModule, MatTooltipModule],
   template: `
     <main class="widget">
-      <header><span class="widget-brand"><img src="icons/app-icon.svg" alt=""><strong>WLSAPlus</strong></span><button (click)="close()" aria-label="Close"><span class="material-symbols-rounded">close</span></button></header>
+      <header><span class="widget-brand"><img src="icons/app-icon.svg" alt=""><strong>WLSAPlus</strong></span><span class="window-actions"><button (click)="closeAll()" aria-label="Close all desktop cards" matTooltip="Close all cards"><span class="material-symbols-rounded">select_window_off</span></button><button (click)="close()" aria-label="Close this desktop card" matTooltip="Close this card"><span class="material-symbols-rounded">close</span></button></span></header>
       <section class="content">
         @if (type() === 'todo') {
           <div class="title-row"><div><div class="status">TASKS</div><h1>To do</h1></div><strong class="count">{{ store.todos().length }}</strong></div>
@@ -42,7 +43,7 @@ import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dial
     </main>
   `,
   styles: `
-    :host { display: block; height: 100vh; background: var(--app-surface); } .widget { position: relative; height: 100%; padding: 14px 16px 18px; display: flex; flex-direction: column; overflow: hidden; } header { flex: 0 0 30px; display: flex; justify-content: space-between; align-items: center; color: var(--app-muted); font-size: 12px; -webkit-app-region: drag; } .widget-brand { display: inline-flex; align-items: center; gap: 7px; } .widget-brand img { width: 20px; height: 20px; } header button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; -webkit-app-region: no-drag; } header .material-symbols-rounded { width: 18px; height: 18px; font-size: 18px; }
+    :host { display: block; height: 100vh; background: var(--app-surface); } .widget { position: relative; height: 100%; padding: 14px 16px 18px; display: flex; flex-direction: column; overflow: hidden; } header { flex: 0 0 30px; display: flex; justify-content: space-between; align-items: center; color: var(--app-muted); font-size: 12px; -webkit-app-region: drag; } .widget-brand, .window-actions { display: inline-flex; align-items: center; } .widget-brand { gap: 7px; } .window-actions { gap: 2px; } .widget-brand img { width: 20px; height: 20px; } header button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; -webkit-app-region: no-drag; } header button:hover { color: var(--app-text); background: var(--app-surface-raised); } header .material-symbols-rounded { width: 18px; height: 18px; font-size: 18px; }
     .content { min-height: 0; overflow: auto; padding: 0 2px 8px; scrollbar-width: thin; } h1 { margin: 10px 0 5px; font-size: 26px; line-height: 1.12; } .status { color: var(--app-accent); font-size: 11px; font-weight: 700; text-transform: uppercase; } .status-line { margin-top: 16px; display: flex; justify-content: space-between; gap: 10px; } .status-line time { color: var(--app-muted); font-size: 11px; }
     .time { color: var(--app-muted); font-size: 14px; } .details { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 14px; color: var(--app-muted); font-size: 12px; } .details > span { display: inline-flex; align-items: center; gap: 5px; } .details .material-symbols-rounded { width: 17px; height: 17px; font-size: 17px; }
     .progress { height: 5px; margin-top: 16px; overflow: hidden; border-radius: 3px; background: var(--app-surface-raised); } .progress span { display: block; height: 100%; background: var(--app-accent); }
@@ -86,5 +87,6 @@ export class WidgetPage {
       if (confirmed) this.store.removeTodo(todo.id);
     });
   }
+  closeAll(): void { void window.wlsaplus?.desktopCards.closeAll(); }
   close(): void { window.close(); }
 }

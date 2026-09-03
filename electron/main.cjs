@@ -9,6 +9,7 @@ const { promisify } = require('node:util');
 const { autoUpdater } = require('electron-updater');
 const { VPN_CONNECTION_MODES, buildVpnConfig } = require('./vpn-config.cjs');
 const { updateFeed } = require('./update-config.cjs');
+const { closeAllCards } = require('./card-manager.cjs');
 
 function handleSquirrelEvent() {
   if (process.platform !== 'win32') return false;
@@ -773,6 +774,7 @@ ipcMain.handle('cards:add', (_event, type) => {
   return createCardWindow(id, type, { x: 32 + offset * 350, y: 80 + Math.floor((id - 1) / 4) * 260 });
 });
 ipcMain.handle('cards:remove', (_event, id) => { cards.get(Number(id))?.close(); });
+ipcMain.handle('cards:close-all', () => closeAllCards(cards));
 ipcMain.handle('vpn:status', () => vpnStatus);
 ipcMain.handle('vpn:connect', (_event, mode) => connectVpn(mode));
 ipcMain.handle('vpn:disconnect', () => disconnectVpn());
