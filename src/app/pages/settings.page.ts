@@ -53,7 +53,7 @@ import { BUILD_VERSION } from '../build-info';
         </div></div></section>
       }
 
-      <section><h2 class="section-title">Local Data</h2><div class="settings-list surface danger-zone"><div class="setting"><div><strong>Clear this device</strong><span>Remove saved credentials, schedule, and tasks.</span></div><button mat-stroked-button (click)="clearData()">Clear data</button></div></div></section>
+      <section><h2 class="section-title">Local Data</h2><div class="settings-list surface danger-zone"><div class="setting"><div><strong>Clear this device</strong><span>Remove saved account information, schedule, and tasks.</span></div><button mat-stroked-button (click)="clearData()">Clear data</button></div></div></section>
       <footer>WLSAPlus {{ version }} · Local-first student tools</footer>
     </div>
   `,

@@ -22,7 +22,7 @@ import { PowerSchoolService } from '../core/powerschool.service';
           <div class="notice"><span class="material-symbols-rounded">computer</span><div><strong>Use the desktop or Android app to connect</strong><br>The web browser cannot access your school's PowerSchool directly. Cached data remains available here.</div></div>
         }
         <form [formGroup]="form" (ngSubmit)="submit()">
-          <mat-form-field appearance="outline"><mat-label>PowerSchool address</mat-label><input matInput formControlName="schoolUrl" autocomplete="url"><span class="material-symbols-rounded field-icon" matSuffix>language</span></mat-form-field>
+          <mat-form-field appearance="outline"><mat-label>PowerSchool address</mat-label><input matInput formControlName="schoolUrl" autocomplete="url" [readonly]="platform.info.kind === 'web'"><span class="material-symbols-rounded field-icon" matSuffix>language</span></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Username</mat-label><input matInput formControlName="username" autocomplete="username"><span class="material-symbols-rounded field-icon" matSuffix>person</span></mat-form-field>
           <mat-form-field appearance="outline"><mat-label>Password</mat-label><input matInput formControlName="password" [type]="showPassword() ? 'text' : 'password'" autocomplete="current-password"><button mat-icon-button matSuffix type="button" (click)="showPassword.set(!showPassword())" aria-label="Toggle password visibility"><span class="material-symbols-rounded field-icon">{{ showPassword() ? 'visibility_off' : 'visibility' }}</span></button></mat-form-field>
           @if (error()) { <div class="error" role="alert">{{ error() }}</div> }

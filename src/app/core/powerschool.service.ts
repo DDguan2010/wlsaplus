@@ -3,7 +3,7 @@ import type { PowerSchoolCredentials, ScheduleSnapshot } from './models';
 import { CredentialVault } from './credential-vault.service';
 import { LocalStore } from './local-store.service';
 import { parsePowerSchoolSchedule } from './powerschool-parser';
-import { PlatformService } from './platform.service';
+import { PlatformService, WEB_POWERSCHOOL_ORIGIN } from './platform.service';
 
 @Injectable({ providedIn: 'root' })
 export class PowerSchoolService {
@@ -15,7 +15,7 @@ export class PowerSchoolService {
     const normalized = { ...credentials, schoolUrl: this.normalizeUrl(credentials.schoolUrl) };
     await this.platform.clearSession(normalized.schoolUrl);
     const login = await this.platform.request({ baseUrl: normalized.schoolUrl, path: '/public/', method: 'GET' });
-    if (login.status >= 400) throw new Error(`PowerSchool returned HTTP ${login.status}.`);
+    this.requireSuccessful(login);
     const doc = new DOMParser().parseFromString(login.text, 'text/html');
     const field = (name: string): string => (doc.querySelector(`input[name="${name}"]`) as HTMLInputElement | null)?.value ?? '';
     const body = new URLSearchParams({
@@ -40,7 +40,8 @@ export class PowerSchoolService {
       body,
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
     });
-    if (result.status >= 400 || /name=["']account["']/i.test(result.text)) {
+    this.requireSuccessful(result);
+    if (/name=["']account["']/i.test(result.text)) {
       throw new Error('Sign in failed. Check the server address, username, and password.');
     }
     const snapshot = await this.fetchSchedule(normalized.schoolUrl);
@@ -57,7 +58,13 @@ export class PowerSchoolService {
 
   async disconnect(): Promise<void> {
     const credentials = await this.vault.get();
-    if (credentials) await this.platform.clearSession(credentials.schoolUrl);
+    try {
+      if (credentials || this.platform.info.kind === 'web') {
+        await this.platform.clearSession(credentials?.schoolUrl ?? WEB_POWERSCHOOL_ORIGIN);
+      }
+    } catch {
+      // Local data must still be removable while the remote gateway is unavailable.
+    }
     await this.vault.clear();
     this.store.clearAll();
   }
@@ -67,7 +74,14 @@ export class PowerSchoolService {
       this.platform.request({ baseUrl, path: '/guardian/myschedule.html', method: 'GET' }),
       this.platform.request({ baseUrl, path: '/guardian/myschedulematrix.html', method: 'GET' }),
     ]);
-    if (!week.text.includes('tableStudentSchedMatrix')) throw new Error('The weekly schedule was not available for this account.');
+    this.requireSuccessful(week);
+    this.requireSuccessful(matrix);
+    if (!week.text.includes('tableStudentSchedMatrix')) {
+      if (/name=["']account["']/i.test(week.text)) {
+        throw new Error('Your PowerSchool session expired. Sign in again.');
+      }
+      throw new Error('The weekly schedule was not available for this account.');
+    }
     const snapshot = parsePowerSchoolSchedule(week.text, matrix.text);
     if (!snapshot.sessions.length) throw new Error('PowerSchool returned an empty or unsupported schedule.');
     return snapshot;
@@ -76,5 +90,17 @@ export class PowerSchoolService {
   private normalizeUrl(value: string): string {
     const url = new URL(/^https?:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`);
     return url.origin;
+  }
+
+  private requireSuccessful(response: { status: number; text: string }): void {
+    if (response.status < 400) return;
+    try {
+      const value = JSON.parse(response.text) as { error?: unknown };
+      if (typeof value.error === 'string' && value.error.trim()) throw new Error(value.error);
+    } catch (error) {
+      if (error instanceof Error && error.message !== 'Unexpected end of JSON input'
+        && !(error instanceof SyntaxError)) throw error;
+    }
+    throw new Error(`PowerSchool returned HTTP ${response.status}.`);
   }
 }

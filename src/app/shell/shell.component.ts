@@ -95,12 +95,17 @@ export class ShellComponent implements OnInit {
       return;
     }
     if (this.platform.info.supportsPowerSchool) {
-      await this.refreshSchedule();
+      const refreshed = await this.refreshSchedule();
+      if (!refreshed && !this.store.hasSchedule() && this.platform.info.kind === 'web') {
+        await this.router.navigateByUrl('/connect');
+        return;
+      }
       window.setInterval(() => void this.refreshSchedule(), 15 * 60 * 1000);
     }
   }
 
-  private async refreshSchedule(): Promise<void> {
-    try { await this.powerSchool.syncSaved(); } catch { /* Keep the last local schedule available offline. */ }
+  private async refreshSchedule(): Promise<boolean> {
+    try { await this.powerSchool.syncSaved(); return true; }
+    catch { return false; /* Keep the last local schedule available offline. */ }
   }
 }
