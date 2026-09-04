@@ -28,6 +28,8 @@ const html = await response.text();
 
 POST bodies and `Content-Type` are forwarded in the same way. Query parameters and upstream response status/body are preserved. PowerSchool `Set-Cookie` values stay inside the Durable Object.
 
+Assignment lookup requests use the internal `X-WLSAPlus-Upstream-Referrer` header to identify the matching `/guardian/scores.html` page. The Worker validates that relative path before converting it to PowerSchool's same-origin `Referer`; browser clients must never send a full external URL.
+
 To discard the session:
 
 ```js

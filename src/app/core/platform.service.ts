@@ -4,6 +4,7 @@ import type { PlatformHttpResponse, PlatformInfo } from './models';
 
 export const WEB_POWERSCHOOL_ORIGIN = 'https://ps.wlsash.org.cn';
 export const WEB_POWERSCHOOL_GATEWAY = 'https://apiwlsaplus.02studio.xyz';
+export const WEB_POWERSCHOOL_REFERRER_HEADER = 'x-wlsaplus-upstream-referrer';
 
 export interface NativeRequest {
   baseUrl: string;
@@ -11,6 +12,7 @@ export interface NativeRequest {
   method: 'GET' | 'POST';
   body?: string;
   headers?: Record<string, string>;
+  referrerPath?: string;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -22,10 +24,18 @@ export class PlatformService {
 
     if (Capacitor.isNativePlatform()) {
       const url = new URL(options.path, options.baseUrl).toString();
+      const headers = { ...(options.headers ?? {}) };
+      if (options.referrerPath) {
+        const origin = new URL(options.baseUrl).origin;
+        const referrer = new URL(options.referrerPath, `${origin}/`);
+        if (referrer.origin !== origin) throw new Error('Cross-origin PowerSchool referrer blocked.');
+        headers['origin'] = origin;
+        headers['referer'] = referrer.toString();
+      }
       const response = await CapacitorHttp.request({
         url,
         method: options.method,
-        headers: options.headers,
+        headers,
         data: options.body,
         responseType: 'text',
         webFetchExtra: { credentials: 'include' },
@@ -34,9 +44,17 @@ export class PlatformService {
     }
 
     const url = this.webGatewayUrl(options);
+    const headers = { ...(options.headers ?? {}) };
+    if (options.referrerPath) {
+      const referrer = new URL(options.referrerPath, `${WEB_POWERSCHOOL_ORIGIN}/`);
+      if (referrer.origin !== WEB_POWERSCHOOL_ORIGIN) {
+        throw new Error('The web version cannot send a cross-origin PowerSchool referrer.');
+      }
+      headers[WEB_POWERSCHOOL_REFERRER_HEADER] = `${referrer.pathname}${referrer.search}`;
+    }
     const response = await fetch(url, {
       method: options.method,
-      headers: options.headers,
+      headers,
       body: options.body,
       credentials: 'include',
       redirect: 'follow',

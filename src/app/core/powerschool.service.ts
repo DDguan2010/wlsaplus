@@ -108,13 +108,13 @@ export class PowerSchoolService {
       if (lookup) {
         const assignments = await this.platform.request({
           baseUrl: credentials.schoolUrl,
-          path: '/ws/xte/assignment/lookup',
+          path: `/ws/xte/assignment/lookup?_=${Date.now()}`,
           method: 'POST',
           body: JSON.stringify(lookup),
+          referrerPath: course.detailsPath,
           headers: {
-            accept: 'application/json',
-            'content-type': 'application/json',
-            'x-requested-with': 'XMLHttpRequest',
+            accept: 'application/json, text/plain, */*',
+            'content-type': 'application/json;charset=UTF-8',
           },
         });
         this.requireSuccessful(assignments);

@@ -26,6 +26,7 @@ declare global {
           method: 'GET' | 'POST';
           body?: string;
           headers?: Record<string, string>;
+          referrerPath?: string;
         }): Promise<PlatformHttpResponse>;
         clearSession(baseUrl: string): Promise<void>;
       };

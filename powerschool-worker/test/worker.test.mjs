@@ -4,6 +4,7 @@ import worker, {
   applySetCookies,
   buildCookieHeader,
   createUpstreamUrl,
+  fetchPowerSchool,
   getSetCookieHeaders,
   isAllowedUpstreamPath,
 } from '../src/worker.js';
@@ -108,6 +109,7 @@ test('edge handler forwards POST bodies and content types', async () => {
       headers: {
         origin: 'https://wlsap.02studio.xyz',
         'content-type': 'application/x-www-form-urlencoded',
+        'x-wlsaplus-upstream-referrer': '/guardian/scores.html?frn=00442&fg=S1',
       },
       body: 'account=student&pw=secret',
     },
@@ -117,7 +119,63 @@ test('edge handler forwards POST bodies and content types', async () => {
   assert.equal(response.status, 200);
   assert.equal(forwardedRequest.method, 'POST');
   assert.equal(forwardedRequest.headers.get('content-type'), 'application/x-www-form-urlencoded');
+  assert.equal(forwardedRequest.headers.get('x-wlsaplus-upstream-referrer'), '/guardian/scores.html?frn=00442&fg=S1');
   assert.equal(await forwardedRequest.text(), 'account=student&pw=secret');
+});
+
+test('assignment lookup receives the PowerSchool origin and course-page referrer', async (context) => {
+  const originalFetch = globalThis.fetch;
+  let upstreamRequest;
+  context.after(() => { globalThis.fetch = originalFetch; });
+  globalThis.fetch = async (input, init) => {
+    upstreamRequest = new Request(input, init);
+    return new Response('[]', { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+
+  await fetchPowerSchool({
+    url: new URL('https://ps.wlsash.org.cn/ws/xte/assignment/lookup?_=123'),
+    method: 'POST',
+    headers: new Headers({
+      accept: 'application/json, text/plain, */*',
+      'content-type': 'application/json;charset=UTF-8',
+      'x-wlsaplus-upstream-referrer': '/guardian/scores.html?frn=00442&fg=S1',
+    }),
+    body: new TextEncoder().encode('{}'),
+    cookieJar: [],
+    allowedPrefixes: ['/public/', '/guardian/', '/ws/xte/assignment/'],
+  });
+
+  assert.equal(upstreamRequest.headers.get('origin'), 'https://ps.wlsash.org.cn');
+  assert.equal(upstreamRequest.headers.get('referer'), 'https://ps.wlsash.org.cn/guardian/scores.html?frn=00442&fg=S1');
+  assert.equal(upstreamRequest.headers.get('x-wlsaplus-upstream-referrer'), null);
+  assert.equal(await upstreamRequest.text(), '{}');
+});
+
+test('edge handler rejects unsafe referrer hints', async () => {
+  const env = {
+    POWERSCHOOL_SESSIONS: {
+      idFromName: (name) => name,
+      get: () => ({ fetch: async () => new Response('should not run') }),
+    },
+  };
+  for (const referrer of [
+    'https://example.com/guardian/scores.html',
+    '/guardian/home.html',
+  ]) {
+    const response = await worker.fetch(new Request(
+      'https://apiwlsaplus.02studio.xyz/api/powerschool/ws/xte/assignment/lookup',
+      {
+        method: 'POST',
+        headers: {
+          origin: 'https://wlsap.02studio.xyz',
+          'x-wlsaplus-upstream-referrer': referrer,
+        },
+      },
+    ), env);
+
+    assert.equal(response.status, 403);
+    assert.deepEqual(await response.json(), { error: 'PowerSchool referrer is not allowed.' });
+  }
 });
 
 test('edge handler rejects unknown origins before allocating a session', async () => {

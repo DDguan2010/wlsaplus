@@ -737,9 +737,16 @@ ipcMain.handle('powerschool:request', async (_event, options) => {
   const origin = validateBaseUrl(options.baseUrl);
   const requestUrl = new URL(String(options.path), origin);
   if (requestUrl.origin !== origin) throw new Error('Cross-origin PowerSchool request blocked.');
+  const headers = { ...(options.headers || {}) };
+  if (options.referrerPath) {
+    const referrerUrl = new URL(String(options.referrerPath), `${origin}/`);
+    if (referrerUrl.origin !== origin) throw new Error('Cross-origin PowerSchool referrer blocked.');
+    headers.origin = origin;
+    headers.referer = referrerUrl.toString();
+  }
   const response = await powerSchoolSession().fetch(requestUrl.toString(), {
     method: options.method === 'POST' ? 'POST' : 'GET',
-    headers: options.headers || {},
+    headers,
     body: options.method === 'POST' ? String(options.body || '') : undefined,
     redirect: 'follow',
   });

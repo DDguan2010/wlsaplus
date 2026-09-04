@@ -9,6 +9,7 @@ const DEFAULT_MAX_REQUEST_BYTES = 256 * 1024;
 const DEFAULT_MAX_RESPONSE_BYTES = 5 * 1024 * 1024;
 const DEFAULT_REQUESTS_PER_MINUTE = 120;
 const MAX_REDIRECTS = 5;
+const UPSTREAM_REFERRER_HEADER = 'x-wlsaplus-upstream-referrer';
 
 const FORWARDED_REQUEST_HEADERS = [
   'accept',
@@ -16,6 +17,8 @@ const FORWARDED_REQUEST_HEADERS = [
   'content-type',
   'x-requested-with',
 ];
+
+const INTERNAL_REQUEST_HEADERS = [...FORWARDED_REQUEST_HEADERS, UPSTREAM_REFERRER_HEADER];
 
 const FORWARDED_RESPONSE_HEADERS = [
   'cache-control',
@@ -82,6 +85,14 @@ export default {
     if (!isAllowedUpstreamPath(upstreamPath, allowedPrefixes)) {
       return withCors(jsonError('PowerSchool path is not allowed.', 403), origin, env);
     }
+    const referrerPath = request.headers.get(UPSTREAM_REFERRER_HEADER);
+    if (referrerPath) {
+      try {
+        createUpstreamReferrer(referrerPath, allowedPrefixes);
+      } catch {
+        return withCors(jsonError('PowerSchool referrer is not allowed.', 403), origin, env);
+      }
+    }
 
     const maxRequestBytes = getPositiveInteger(
       env.MAX_REQUEST_BYTES,
@@ -102,7 +113,7 @@ export default {
 
     const internalUrl = new URL('https://session.internal/proxy');
     internalUrl.searchParams.set('path', `${upstreamPath}${requestUrl.search}`);
-    const internalHeaders = copyHeaders(request.headers, FORWARDED_REQUEST_HEADERS);
+    const internalHeaders = copyHeaders(request.headers, INTERNAL_REQUEST_HEADERS);
 
     let upstreamResponse;
     try {
@@ -237,7 +248,7 @@ export class PowerSchoolSession {
   }
 }
 
-async function fetchPowerSchool({ url, method, headers, body, cookieJar, allowedPrefixes }) {
+export async function fetchPowerSchool({ url, method, headers, body, cookieJar, allowedPrefixes }) {
   let currentUrl = url;
   let currentMethod = method;
   let currentBody = body;
@@ -245,6 +256,13 @@ async function fetchPowerSchool({ url, method, headers, body, cookieJar, allowed
 
   while (true) {
     const upstreamHeaders = copyHeaders(headers, FORWARDED_REQUEST_HEADERS);
+    const referrerPath = headers.get(UPSTREAM_REFERRER_HEADER);
+    if (referrerPath) {
+      upstreamHeaders.set('referer', createUpstreamReferrer(referrerPath, allowedPrefixes).toString());
+    }
+    if (currentMethod !== 'GET' && currentMethod !== 'HEAD') {
+      upstreamHeaders.set('origin', UPSTREAM_ORIGIN);
+    }
     const cookieHeader = buildCookieHeader(cookieJar, currentUrl);
     if (cookieHeader) upstreamHeaders.set('cookie', cookieHeader);
     if (currentMethod === 'GET' || currentMethod === 'HEAD') {
@@ -317,6 +335,12 @@ export function createUpstreamUrl(pathAndSearch, allowedPrefixes = DEFAULT_ALLOW
   if (!isAllowedUpstreamPath(path, allowedPrefixes)) throw new Error('Path is not allowed.');
   const url = new URL(pathAndSearch, `${UPSTREAM_ORIGIN}/`);
   if (url.origin !== UPSTREAM_ORIGIN) throw new Error('Origin is not allowed.');
+  return url;
+}
+
+function createUpstreamReferrer(pathAndSearch, allowedPrefixes) {
+  const url = createUpstreamUrl(pathAndSearch, allowedPrefixes);
+  if (url.pathname !== '/guardian/scores.html') throw new Error('Referrer is not a score page.');
   return url;
 }
 
@@ -491,7 +515,7 @@ function withCors(response, origin, env, setCookie = null, methodsOverride = nul
   headers.set('access-control-allow-origin', origin);
   headers.set('access-control-allow-credentials', 'true');
   headers.set('access-control-allow-methods', [...new Set([...methods, 'POST', 'DELETE', 'OPTIONS'])].join(', '));
-  headers.set('access-control-allow-headers', 'Accept, Content-Type, X-Requested-With');
+  headers.set('access-control-allow-headers', 'Accept, Content-Type, X-Requested-With, X-WLSAPlus-Upstream-Referrer');
   headers.set('access-control-max-age', '86400');
   headers.set('cache-control', 'no-store');
   headers.set('x-content-type-options', 'nosniff');
