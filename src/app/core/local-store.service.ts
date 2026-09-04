@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { normalizeTodoEndAt } from './models';
-import type { AppSettings, ScheduleSnapshot, TodoItem } from './models';
+import type { AppColor, AppSettings, ScheduleSnapshot, ThemeMode, TodoItem } from './models';
 
 const EMPTY_SCHEDULE: ScheduleSnapshot = {
   syncedAt: '',
@@ -12,15 +12,19 @@ const EMPTY_SCHEDULE: ScheduleSnapshot = {
 
 const DEFAULT_SETTINGS: AppSettings = {
   theme: 'system',
+  color: 'default',
   tuningEnabled: false,
   tunedTime: null,
 };
+
+const THEME_MODES = new Set<ThemeMode>(['system', 'light', 'dark']);
+const APP_COLORS = new Set<AppColor>(['default', 'blue', 'green', 'purple', 'rose']);
 
 @Injectable({ providedIn: 'root' })
 export class LocalStore {
   readonly schedule = signal(this.read<ScheduleSnapshot>('schedule', EMPTY_SCHEDULE));
   readonly todos = signal(this.readTodos());
-  readonly settings = signal(this.read<AppSettings>('settings', DEFAULT_SETTINGS));
+  readonly settings = signal(this.readSettings());
   readonly hasSchedule = computed(() => this.schedule().sessions.length > 0);
 
   constructor() {
@@ -29,7 +33,7 @@ export class LocalStore {
       if (event.key === this.key('schedule')) this.schedule.set(this.parse(event.newValue, EMPTY_SCHEDULE));
       if (event.key === this.key('todos')) this.todos.set(this.parseTodos(event.newValue));
       if (event.key === this.key('settings')) {
-        this.settings.set(this.parse(event.newValue, DEFAULT_SETTINGS));
+        this.settings.set(this.parseSettings(event.newValue));
         this.applyTheme();
       }
     });
@@ -90,9 +94,10 @@ export class LocalStore {
   }
 
   applyTheme(): void {
-    const mode = this.settings().theme;
+    const { theme: mode, color } = this.settings();
     const dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark-theme', dark);
+    document.documentElement.dataset['appColor'] = color;
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
     document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#101114' : '#ffffff');
   }
@@ -107,6 +112,22 @@ export class LocalStore {
 
   private readTodos(): TodoItem[] {
     return this.parseTodos(localStorage.getItem(this.key('todos')));
+  }
+
+  private readSettings(): AppSettings {
+    return this.parseSettings(localStorage.getItem(this.key('settings')));
+  }
+
+  private parseSettings(raw: string | null): AppSettings {
+    const parsed = this.parse<unknown>(raw, DEFAULT_SETTINGS);
+    if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_SETTINGS };
+    const value = parsed as Record<string, unknown>;
+    return {
+      theme: THEME_MODES.has(value['theme'] as ThemeMode) ? value['theme'] as ThemeMode : DEFAULT_SETTINGS.theme,
+      color: APP_COLORS.has(value['color'] as AppColor) ? value['color'] as AppColor : DEFAULT_SETTINGS.color,
+      tuningEnabled: typeof value['tuningEnabled'] === 'boolean' ? value['tuningEnabled'] : DEFAULT_SETTINGS.tuningEnabled,
+      tunedTime: typeof value['tunedTime'] === 'string' ? value['tunedTime'] : null,
+    };
   }
 
   private parseTodos(raw: string | null): TodoItem[] {

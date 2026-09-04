@@ -9,7 +9,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ClockService } from '../core/clock.service';
 import { LocalStore } from '../core/local-store.service';
-import type { DesktopCardType, ThemeMode } from '../core/models';
+import type { AppColor, DesktopCardType, ThemeMode } from '../core/models';
 import { PlatformService } from '../core/platform.service';
 import { PowerSchoolService } from '../core/powerschool.service';
 import { UpdateService } from '../core/update.service';
@@ -22,7 +22,14 @@ import { BUILD_VERSION } from '../build-info';
   template: `
     <div class="page">
       <header class="page-header"><h1 class="page-title">Settings</h1></header>
-      <section><h2 class="section-title">Appearance</h2><div class="setting surface"><div><strong>Theme</strong><span>Choose how WLSAPlus looks.</span></div><mat-button-toggle-group [value]="store.settings().theme" (change)="setTheme($event.value)"><mat-button-toggle value="system">System</mat-button-toggle><mat-button-toggle value="light">Light</mat-button-toggle><mat-button-toggle value="dark">Dark</mat-button-toggle></mat-button-toggle-group></div></section>
+      <section><h2 class="section-title">Appearance</h2><div class="settings-list surface">
+        <div class="setting"><div><strong>Theme</strong><span>Choose how WLSAPlus looks.</span></div><mat-button-toggle-group [value]="store.settings().theme" (change)="setTheme($event.value)"><mat-button-toggle value="system">System</mat-button-toggle><mat-button-toggle value="light">Light</mat-button-toggle><mat-button-toggle value="dark">Dark</mat-button-toggle></mat-button-toggle-group></div>
+        <div class="setting color-setting"><div><strong>App color</strong><span>Choose your accent color.</span></div><div class="color-options" role="radiogroup" aria-label="App color">
+          @for (option of colors; track option.value) {
+            <button type="button" role="radio" class="color-option" [class.selected]="store.settings().color === option.value" [attr.aria-checked]="store.settings().color === option.value" (click)="setColor(option.value)"><span class="color-swatch" [style.background]="option.swatch"></span><span>{{ option.label }}</span></button>
+          }
+        </div></div>
+      </div></section>
 
       <section><h2 class="section-title">Schedule</h2><div class="settings-list surface">
         <div class="setting"><div><strong>PowerSchool</strong><span>@if (store.schedule().syncedAt) { Last updated {{ store.schedule().syncedAt | date:'MMM d, HH:mm' }} } @else { Not connected }</span></div><button mat-stroked-button (click)="sync()" [disabled]="syncing() || !platform.info.supportsPowerSchool"><span class="material-symbols-rounded">sync</span>{{ syncing() ? 'Syncing' : 'Sync now' }}</button></div>
@@ -60,11 +67,12 @@ import { BUILD_VERSION } from '../build-info';
   styles: `
     .settings-list { overflow: hidden; } .setting { min-height: 78px; padding: 16px 18px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 20px; border-bottom: 1px solid var(--app-border); } .setting:last-child { border: 0; }
     .setting > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; } .setting > div strong { line-height: 1.25; } .setting > div > span { color: var(--app-muted); font-size: 13px; line-height: 1.4; } .setting button, .widget-actions button, .time-buttons button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap; } .setting button .material-symbols-rounded, .widget-actions .material-symbols-rounded { margin: 0; font-size: 19px; line-height: 1; }
+    .color-options { display: flex !important; flex-direction: row !important; flex-wrap: wrap; justify-content: flex-end; gap: 7px !important; } .color-option { min-height: 38px; padding: 6px 10px; border: 1px solid var(--app-border); border-radius: 6px; background: transparent; color: var(--app-text); cursor: pointer; } .color-option:hover { background: var(--app-surface-raised); } .color-option.selected { border-color: var(--app-accent); background: var(--app-accent-soft); } .color-swatch { width: 18px; height: 18px; flex: 0 0 18px; border: 1px solid rgb(0 0 0 / 12%); border-radius: 50%; }
     .tuning-panel { padding: 18px; background: var(--app-surface-raised); } input { height: 48px; width: min(100%, 280px); padding: 0 12px; border: 1px solid var(--app-border); border-radius: 6px; background: var(--app-surface); color: var(--app-text); }
     .time-buttons, .widget-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; } .widget-actions { padding: 0 18px 18px; margin-top: 0; }
     .danger-zone button { color: #ba1a1a; } footer { padding: 34px 0 6px; color: var(--app-muted); text-align: center; font-size: 12px; }
     .update-progress { width: min(100%, 360px); display: grid; grid-template-columns: minmax(0,1fr) 36px; align-items: center; gap: 9px; margin-top: 8px; color: var(--app-muted); font-size: 11px; } .update-progress progress { width: 100%; height: 7px; accent-color: var(--app-accent); }
-    @media (max-width: 680px) { .setting { gap: 12px; } .setting > button { justify-self: start; } .setting > mat-slide-toggle { justify-self: end; } mat-button-toggle-group { width: 100%; } mat-button-toggle { flex: 1; } }
+    @media (max-width: 680px) { .setting { gap: 12px; } .setting > button { justify-self: start; } .setting > mat-slide-toggle { justify-self: end; } mat-button-toggle-group { width: 100%; } mat-button-toggle { flex: 1; } .color-setting { grid-template-columns: 1fr; } .color-options { justify-content: flex-start; } }
   `,
 })
 export class SettingsPage {
@@ -74,6 +82,13 @@ export class SettingsPage {
   private readonly service = inject(PowerSchoolService); private readonly router = inject(Router); private readonly snack = inject(MatSnackBar); private readonly dialog = inject(MatDialog);
   readonly syncing = signal(false);
   readonly launchAtStartup = signal(true);
+  readonly colors: { value: AppColor; label: string; swatch: string }[] = [
+    { value: 'default', label: 'Default', swatch: '#00677a' },
+    { value: 'blue', label: 'Blue', swatch: '#315da8' },
+    { value: 'green', label: 'Green', swatch: '#356a35' },
+    { value: 'purple', label: 'Purple', swatch: '#6750a4' },
+    { value: 'rose', label: 'Rose', swatch: '#984061' },
+  ];
   readonly cards: { type: DesktopCardType; label: string; icon: string }[] = [
     { type: 'current-class', label: 'Current class', icon: 'schedule' }, { type: 'next-class', label: 'Next class', icon: 'skip_next' }, { type: 'today', label: 'Today', icon: 'calendar_today' }, { type: 'todo', label: 'Tasks', icon: 'checklist' },
   ];
@@ -81,6 +96,7 @@ export class SettingsPage {
     if (this.platform.info.supportsDesktopCards) void window.wlsaplus?.desktopCards.getSettings().then((value) => this.launchAtStartup.set(value.launchAtStartup));
   }
   setTheme(theme: ThemeMode): void { this.store.updateSettings({ theme }); }
+  setColor(color: AppColor): void { this.store.updateSettings({ color }); }
   toggleTuning(enabled: boolean): void { this.store.updateSettings({ tuningEnabled: enabled, tunedTime: enabled ? (this.store.settings().tunedTime ?? new Date().toISOString()) : null }); }
   localDateTime(): string { const date = this.clock.now(); const offset = date.getTimezoneOffset(); return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16); }
   setTime(event: Event): void { this.clock.setTunedTime((event.target as HTMLInputElement).value); }

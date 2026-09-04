@@ -1,5 +1,6 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { PlatformService } from '../core/platform.service';
 
 @Component({
   selector: 'app-tools-page',
@@ -8,7 +9,7 @@ import { RouterLink } from '@angular/router';
     <div class="page">
       <header class="page-header"><h1 class="page-title">Tools</h1></header>
       <section class="tool-list" aria-label="Available tools">
-        <a class="tool-row surface" routerLink="/tools/vpn"><span class="tool-icon material-symbols-rounded">vpn_lock</span><span><strong>VPN</strong><small>Free VPN used for access to apps and websites blocked by school Wi-Fi. Sometimes unstable.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a>
+        @if (platform.info.kind !== 'web') { <a class="tool-row surface" routerLink="/tools/vpn"><span class="tool-icon material-symbols-rounded">vpn_lock</span><span><strong>VPN</strong><small>Free VPN used for access to apps and websites blocked by school Wi-Fi. Sometimes unstable.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a> }
         <a class="tool-row surface" routerLink="/tools/translate"><span class="tool-icon material-symbols-rounded">translate</span><span><strong>Translator</strong><small>Translate text between languages and recognize text from a selected screen region on Windows.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a>
       </section>
     </div>
@@ -22,4 +23,4 @@ import { RouterLink } from '@angular/router';
     @media (max-width: 520px) { .tool-row { grid-template-columns: 42px minmax(0,1fr) 20px; padding: 15px 13px; gap: 11px; } .tool-icon { width: 42px; height: 42px; font-size: 23px; } }
   `,
 })
-export class ToolsPage {}
+export class ToolsPage { readonly platform = inject(PlatformService); }

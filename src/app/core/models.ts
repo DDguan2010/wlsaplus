@@ -1,4 +1,5 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type AppColor = 'default' | 'blue' | 'green' | 'purple' | 'rose';
 export type DesktopCardType = 'current-class' | 'next-class' | 'today' | 'todo';
 
 export interface PowerSchoolCredentials {
@@ -59,6 +60,7 @@ export function todoDeadlineProgress(todo: Pick<TodoItem, 'createdAt' | 'endAt'>
 
 export interface AppSettings {
   theme: ThemeMode;
+  color: AppColor;
   tuningEnabled: boolean;
   tunedTime: string | null;
 }
