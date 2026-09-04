@@ -1,8 +1,13 @@
 import { Injectable, inject } from '@angular/core';
-import type { PowerSchoolCredentials, ScheduleSnapshot } from './models';
+import type { PowerSchoolCredentials, ProgressCourse, ProgressSnapshot, ScheduleSnapshot } from './models';
 import { CredentialVault } from './credential-vault.service';
 import { LocalStore } from './local-store.service';
-import { parsePowerSchoolSchedule } from './powerschool-parser';
+import {
+  parseAssignmentLookupRequest,
+  parsePowerSchoolCourseDetails,
+  parsePowerSchoolProgress,
+  parsePowerSchoolSchedule,
+} from './powerschool-parser';
 import { PlatformService, WEB_POWERSCHOOL_ORIGIN } from './platform.service';
 
 @Injectable({ providedIn: 'root' })
@@ -44,9 +49,13 @@ export class PowerSchoolService {
     if (/name=["']account["']/i.test(result.text)) {
       throw new Error('Sign in failed. Check the server address, username, and password.');
     }
-    const snapshot = await this.fetchSchedule(normalized.schoolUrl);
+    const [snapshot, progress] = await Promise.all([
+      this.fetchSchedule(normalized.schoolUrl),
+      this.fetchProgress(normalized.schoolUrl, result.text),
+    ]);
     await this.vault.set(normalized);
     this.store.saveSchedule(snapshot);
+    this.store.saveProgress(progress);
     return snapshot;
   }
 
@@ -69,6 +78,59 @@ export class PowerSchoolService {
     this.store.clearAll();
   }
 
+  async loadCourse(courseId: string, force = false): Promise<ProgressCourse> {
+    const course = this.store.progress().courses.find((item) => item.id === courseId);
+    if (!course) throw new Error('This course is no longer available.');
+    if (!force && course.details && Date.now() - Date.parse(course.details.loadedAt) < 5 * 60_000) return course;
+    if (!course.detailsPath) {
+      const updated = this.store.updateProgressCourse(courseId, {
+        details: { description: '', teacherComment: '', assignments: [], loadedAt: new Date().toISOString() },
+      });
+      if (!updated) throw new Error('This course is no longer available.');
+      return updated;
+    }
+    const credentials = await this.vault.get();
+    if (!credentials) {
+      if (course.details) return course;
+      throw new Error('Connect to PowerSchool to load this course.');
+    }
+
+    try {
+      const page = await this.platform.request({
+        baseUrl: credentials.schoolUrl,
+        path: course.detailsPath,
+        method: 'GET',
+      });
+      this.requireSuccessful(page);
+      this.requireSignedIn(page.text);
+      const lookup = parseAssignmentLookupRequest(page.text);
+      let assignmentJson = '[]';
+      if (lookup) {
+        const assignments = await this.platform.request({
+          baseUrl: credentials.schoolUrl,
+          path: '/ws/xte/assignment/lookup',
+          method: 'POST',
+          body: JSON.stringify(lookup),
+          headers: {
+            accept: 'application/json',
+            'content-type': 'application/json',
+            'x-requested-with': 'XMLHttpRequest',
+          },
+        });
+        this.requireSuccessful(assignments);
+        assignmentJson = assignments.text;
+      }
+      const updated = this.store.updateProgressCourse(courseId, {
+        details: parsePowerSchoolCourseDetails(page.text, assignmentJson),
+      });
+      if (!updated) throw new Error('This course is no longer available.');
+      return updated;
+    } catch (error) {
+      if (course.details) return course;
+      throw error;
+    }
+  }
+
   private async fetchSchedule(baseUrl: string): Promise<ScheduleSnapshot> {
     const [week, matrix] = await Promise.all([
       this.platform.request({ baseUrl, path: '/guardian/myschedule.html', method: 'GET' }),
@@ -87,6 +149,27 @@ export class PowerSchoolService {
     return snapshot;
   }
 
+  private async fetchProgress(baseUrl: string, homeHtml: string): Promise<ProgressSnapshot> {
+    let attendanceHtml = '';
+    try {
+      const attendance = await this.platform.request({ baseUrl, path: '/guardian/attendance.html', method: 'GET' });
+      if (attendance.status < 400 && !this.isSignInPage(attendance.text)) attendanceHtml = attendance.text;
+    } catch {
+      // Grade summaries remain useful when attendance history is temporarily unavailable.
+    }
+    const progress = parsePowerSchoolProgress(homeHtml, attendanceHtml);
+    if (!attendanceHtml && this.store.progress().attendanceEvents.length) {
+      const cached = this.store.progress();
+      return {
+        ...progress,
+        attendanceStart: cached.attendanceStart,
+        attendanceEnd: cached.attendanceEnd,
+        attendanceEvents: cached.attendanceEvents,
+      };
+    }
+    return progress;
+  }
+
   private normalizeUrl(value: string): string {
     const url = new URL(/^https?:\/\//i.test(value.trim()) ? value.trim() : `https://${value.trim()}`);
     return url.origin;
@@ -102,5 +185,13 @@ export class PowerSchoolService {
         && !(error instanceof SyntaxError)) throw error;
     }
     throw new Error(`PowerSchool returned HTTP ${response.status}.`);
+  }
+
+  private isSignInPage(html: string): boolean {
+    return /name=["']account["']/i.test(html);
+  }
+
+  private requireSignedIn(html: string): void {
+    if (this.isSignInPage(html)) throw new Error('Your PowerSchool session expired. Refresh Progress and try again.');
   }
 }

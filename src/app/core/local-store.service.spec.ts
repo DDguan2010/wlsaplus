@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { LocalStore } from './local-store.service';
-import type { AppSettings, ScheduleSnapshot, TodoItem } from './models';
+import type { AppSettings, ProgressSnapshot, ScheduleSnapshot, TodoItem } from './models';
 
 describe('LocalStore', () => {
   beforeEach(() => {
@@ -54,6 +54,23 @@ describe('LocalStore', () => {
     const store = new LocalStore();
 
     expect(store.todos()).toEqual([{ id: 'todo-1', title: 'Legacy task', details: '', createdAt: '2026-08-29T08:00:00.000Z', endAt: null }]);
+  });
+
+  it('stores progress and preserves loaded course details across summary refreshes', () => {
+    const store = new LocalStore();
+    const progress: ProgressSnapshot = {
+      syncedAt: '2026-09-04T08:00:00.000Z', term: 'S1', absenceTotal: 0, tardyTotal: 0,
+      attendanceStart: '2026-08-24', attendanceEnd: '2027-01-24', attendanceEvents: [],
+      courses: [{ id: 'course-1', name: 'Algebra', teacher: 'Teacher', room: '210', meetingPattern: 'P1', term: 'S1', grade: '', absences: 0, tardies: 0, detailsPath: '/guardian/scores.html?course=1', details: null }],
+    };
+    store.saveProgress(progress);
+    store.updateProgressCourse('course-1', { details: { description: '', teacherComment: '', assignments: [], loadedAt: '2026-09-04T08:01:00.000Z' } });
+
+    store.saveProgress({ ...progress, syncedAt: '2026-09-04T08:15:00.000Z', courses: progress.courses.map((course) => ({ ...course, grade: 'A' })) });
+
+    expect(store.progress().courses[0].grade).toBe('A');
+    expect(store.progress().courses[0].details?.loadedAt).toBe('2026-09-04T08:01:00.000Z');
+    expect(JSON.parse(localStorage.getItem('wlsaplus:progress') ?? '{}').courses).toHaveLength(1);
   });
 
   it('adds and edits task titles and details', () => {

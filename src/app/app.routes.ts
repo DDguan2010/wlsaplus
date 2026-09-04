@@ -2,6 +2,7 @@ import type { Routes } from '@angular/router';
 import { ConnectPage } from './pages/connect.page';
 import { HomePage } from './pages/home.page';
 import { SchedulePage } from './pages/schedule.page';
+import { ProgressPage } from './pages/progress.page';
 import { SettingsPage } from './pages/settings.page';
 import { ShellComponent } from './shell/shell.component';
 import { WidgetPage } from './pages/widget.page';
@@ -16,6 +17,7 @@ export const routes: Routes = [
     path: '', component: ShellComponent, children: [
       { path: '', component: HomePage },
       { path: 'schedule', component: SchedulePage },
+      { path: 'progress', component: ProgressPage },
       { path: 'tools/vpn', component: VpnPage },
       { path: 'tools/translate', component: TranslatorPage },
       { path: 'tools', component: ToolsPage },

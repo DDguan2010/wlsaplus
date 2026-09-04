@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { normalizeTodoEndAt } from './models';
-import type { AppColor, AppSettings, ScheduleSnapshot, ThemeMode, TodoItem } from './models';
+import type { AppColor, AppSettings, ProgressCourse, ProgressSnapshot, ScheduleSnapshot, ThemeMode, TodoItem } from './models';
 
 const EMPTY_SCHEDULE: ScheduleSnapshot = {
   syncedAt: '',
@@ -17,20 +17,34 @@ const DEFAULT_SETTINGS: AppSettings = {
   tunedTime: null,
 };
 
+const EMPTY_PROGRESS: ProgressSnapshot = {
+  syncedAt: '',
+  term: '',
+  absenceTotal: null,
+  tardyTotal: null,
+  attendanceStart: '',
+  attendanceEnd: '',
+  courses: [],
+  attendanceEvents: [],
+};
+
 const THEME_MODES = new Set<ThemeMode>(['system', 'light', 'dark']);
 const APP_COLORS = new Set<AppColor>(['default', 'blue', 'green', 'purple', 'rose']);
 
 @Injectable({ providedIn: 'root' })
 export class LocalStore {
   readonly schedule = signal(this.read<ScheduleSnapshot>('schedule', EMPTY_SCHEDULE));
+  readonly progress = signal(this.read<ProgressSnapshot>('progress', EMPTY_PROGRESS));
   readonly todos = signal(this.readTodos());
   readonly settings = signal(this.readSettings());
   readonly hasSchedule = computed(() => this.schedule().sessions.length > 0);
+  readonly hasProgress = computed(() => this.progress().courses.length > 0 || this.progress().syncedAt !== '');
 
   constructor() {
     window.addEventListener('storage', (event) => {
       if (event.storageArea !== localStorage || !event.key) return;
       if (event.key === this.key('schedule')) this.schedule.set(this.parse(event.newValue, EMPTY_SCHEDULE));
+      if (event.key === this.key('progress')) this.progress.set(this.parse(event.newValue, EMPTY_PROGRESS));
       if (event.key === this.key('todos')) this.todos.set(this.parseTodos(event.newValue));
       if (event.key === this.key('settings')) {
         this.settings.set(this.parseSettings(event.newValue));
@@ -56,6 +70,35 @@ export class LocalStore {
     };
     this.todos.update((items) => [value, ...items]);
     this.write('todos', this.todos());
+  }
+
+  saveProgress(value: ProgressSnapshot): void {
+    const previous = new Map(this.progress().courses.map((course) => [course.id, course]));
+    const merged = {
+      ...value,
+      courses: value.courses.map((course) => {
+        const cached = previous.get(course.id);
+        return cached?.details && cached.detailsPath === course.detailsPath
+          ? { ...course, details: cached.details }
+          : course;
+      }),
+    };
+    this.progress.set(merged);
+    this.write('progress', merged);
+  }
+
+  updateProgressCourse(courseId: string, patch: Partial<ProgressCourse>): ProgressCourse | null {
+    let updated: ProgressCourse | null = null;
+    this.progress.update((snapshot) => ({
+      ...snapshot,
+      courses: snapshot.courses.map((course) => {
+        if (course.id !== courseId) return course;
+        updated = { ...course, ...patch };
+        return updated;
+      }),
+    }));
+    if (updated) this.write('progress', this.progress());
+    return updated;
   }
 
   updateTodo(id: string, title: string, details = '', endAt?: string | null): boolean {
@@ -88,8 +131,10 @@ export class LocalStore {
 
   clearAll(): void {
     localStorage.removeItem(this.key('schedule'));
+    localStorage.removeItem(this.key('progress'));
     localStorage.removeItem(this.key('todos'));
     this.schedule.set(EMPTY_SCHEDULE);
+    this.progress.set(EMPTY_PROGRESS);
     this.todos.set([]);
   }
 

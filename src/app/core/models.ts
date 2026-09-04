@@ -35,6 +35,68 @@ export interface ScheduleSnapshot {
   courses: Course[];
 }
 
+export type AttendanceKind = 'absence' | 'tardy' | 'other';
+
+export interface AssignmentScore {
+  id: string;
+  name: string;
+  description: string;
+  dueDate: string | null;
+  category: string;
+  pointsEarned: number | null;
+  pointsPossible: number | null;
+  percent: number | null;
+  letterGrade: string;
+  isLate: boolean;
+  isMissing: boolean;
+  isAbsent: boolean;
+  isExempt: boolean;
+  isIncomplete: boolean;
+  countsInFinalGrade: boolean;
+}
+
+export interface CourseProgressDetails {
+  description: string;
+  teacherComment: string;
+  assignments: AssignmentScore[];
+  loadedAt: string;
+}
+
+export interface ProgressCourse {
+  id: string;
+  name: string;
+  teacher: string;
+  room: string;
+  meetingPattern: string;
+  term: string;
+  grade: string;
+  absences: number | null;
+  tardies: number | null;
+  detailsPath: string;
+  details: CourseProgressDetails | null;
+}
+
+export interface AttendanceEvent {
+  id: string;
+  date: string;
+  courseName: string;
+  meetingPattern: string;
+  kind: AttendanceKind;
+  label: string;
+  count: number;
+}
+
+export interface ProgressSnapshot {
+  syncedAt: string;
+  term: string;
+  absenceTotal: number | null;
+  tardyTotal: number | null;
+  attendanceStart: string;
+  attendanceEnd: string;
+  courses: ProgressCourse[];
+  attendanceEvents: AttendanceEvent[];
+}
+
 export interface TodoItem {
   id: string;
   title: string;

@@ -11,6 +11,8 @@ import worker, {
 test('allows only configured PowerSchool paths', () => {
   assert.equal(isAllowedUpstreamPath('/public/'), true);
   assert.equal(isAllowedUpstreamPath('/guardian/myschedule.html'), true);
+  assert.equal(isAllowedUpstreamPath('/ws/xte/assignment/lookup'), true);
+  assert.equal(isAllowedUpstreamPath('/ws/schema/query/private'), false);
   assert.equal(isAllowedUpstreamPath('/admin/home.html'), false);
   assert.equal(isAllowedUpstreamPath('//example.com/guardian/home.html'), false);
   assert.equal(isAllowedUpstreamPath('/guardian/%2e%2e/admin'), false);

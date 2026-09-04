@@ -68,7 +68,7 @@ import { UpdateService } from '../core/update.service';
     .progress-row { display: grid; grid-template-columns: minmax(0,1fr) 34px; align-items: center; gap: 8px; margin-top: 4px; color: var(--app-muted); font-size: 11px; } progress { width: 100%; height: 6px; accent-color: var(--app-accent); }
     @media (max-width: 899px) {
       .rail { display: none; } main { margin-left: 0; }
-      .bottom-nav { position: fixed; display: grid; grid-template-columns: repeat(4, 1fr); inset: auto 0 0; z-index: 20; min-height: 72px; padding: 4px max(8px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: color-mix(in srgb, var(--app-surface) 94%, transparent); border-top: 1px solid var(--app-border); backdrop-filter: blur(18px); }
+      .bottom-nav { position: fixed; display: grid; grid-template-columns: repeat(5, 1fr); inset: auto 0 0; z-index: 20; min-height: 72px; padding: 4px max(8px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: color-mix(in srgb, var(--app-surface) 94%, transparent); border-top: 1px solid var(--app-border); backdrop-filter: blur(18px); }
       .bottom-nav a { min-height: 62px; }
       .update-alert { right: 12px; bottom: 84px; width: calc(100vw - 24px); grid-template-columns: 38px minmax(0,1fr); } .update-alert button { grid-column: 2; justify-self: start; }
     }
@@ -84,6 +84,7 @@ export class ShellComponent implements OnInit {
   readonly nav = [
     { path: '/', label: 'Home', icon: 'home' },
     { path: '/schedule', label: 'Schedule', icon: 'calendar_month' },
+    { path: '/progress', label: 'Progress', icon: 'monitoring' },
     { path: '/tools', label: 'Tools', icon: 'build' },
     { path: '/settings', label: 'Settings', icon: 'settings' },
   ];

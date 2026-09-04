@@ -5,7 +5,7 @@ workers_dev = false
 
 [vars]
 ALLOWED_ORIGINS = "https://wlsap.02studio.xyz"
-ALLOWED_PATH_PREFIXES = "/public/,/guardian/"
+ALLOWED_PATH_PREFIXES = "/public/,/guardian/,/ws/xte/assignment/"
 ALLOWED_METHODS = "GET,HEAD,POST"
 SESSION_TTL_SECONDS = "1800"
 MAX_REQUEST_BYTES = "262144"
