@@ -93,7 +93,7 @@ describe('PowerSchool assignment parsing', () => {
     const response = JSON.stringify([{
       assignmentid: 9001,
       _assignmentsections: [{
-        name: 'Linear equations', description: 'Complete questions 1-5.', duedate: '2026-8-31',
+        name: 'Linear equations', description: '<p>Complete questions <strong>1-5</strong>.</p><p>Show your work.<br>Submit in class.</p>', duedate: '2026-8-31',
         isscorespublish: true, iscountedinfinalgrade: true, totalpointvalue: 10,
         _assignmentscores: [{ scorepoints: 8, scorepercent: 80, scorelettergrade: 'B', islate: true, ismissing: false, isabsent: false, isexempt: false, isincomplete: false }],
         _assignmentcategoryassociations: [{ _teachercategory: { name: 'Homework' } }],
@@ -103,7 +103,7 @@ describe('PowerSchool assignment parsing', () => {
     const details = parsePowerSchoolCourseDetails(scorePage, response);
 
     expect(details).toMatchObject({ teacherComment: 'Good participation.', description: 'Introduction to algebra.' });
-    expect(details.assignments).toEqual([expect.objectContaining({ id: '9001', name: 'Linear equations', dueDate: '2026-08-31', category: 'Homework', pointsEarned: 8, pointsPossible: 10, percent: 80, letterGrade: 'B', isLate: true })]);
+    expect(details.assignments).toEqual([expect.objectContaining({ id: '9001', name: 'Linear equations', description: 'Complete questions 1-5. Show your work. Submit in class.', dueDate: '2026-08-31', category: 'Homework', pointsEarned: 8, pointsPossible: 10, percent: 80, letterGrade: 'B', isLate: true })]);
   });
 
   it('uses an empty assignment list for a valid empty response', () => {

@@ -47,4 +47,17 @@ contextBridge.exposeInMainWorld('wlsaplus', {
       ? ipcRenderer.invoke('translator:capture-region')
       : Promise.reject(new Error('Screen translation is available on Windows only.')),
   },
+  phone: {
+    status: () => ipcRenderer.invoke('phone:status'),
+    connect: (options) => ipcRenderer.invoke('phone:connect', options),
+    start: (options) => ipcRenderer.invoke('phone:start', options),
+    stop: () => ipcRenderer.invoke('phone:stop'),
+    disconnect: () => ipcRenderer.invoke('phone:disconnect'),
+    control: (action) => ipcRenderer.invoke('phone:control', action),
+    onStatus: (callback) => {
+      const handler = (_event, status) => callback(status);
+      ipcRenderer.on('phone:status', handler);
+      return () => ipcRenderer.removeListener('phone:status', handler);
+    },
+  },
 });

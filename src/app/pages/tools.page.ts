@@ -10,6 +10,7 @@ import { PlatformService } from '../core/platform.service';
       <header class="page-header"><h1 class="page-title">Tools</h1></header>
       <section class="tool-list" aria-label="Available tools">
         @if (platform.info.kind !== 'web') { <a class="tool-row surface" routerLink="/tools/vpn"><span class="tool-icon material-symbols-rounded">vpn_lock</span><span><strong>VPN</strong><small>Free VPN used for access to apps and websites blocked by school Wi-Fi. Sometimes unstable.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a> }
+        @if (platform.info.supportsPhoneControl) { <a class="tool-row surface" routerLink="/tools/phone"><span class="tool-icon material-symbols-rounded">cast</span><span><strong>Phone control</strong><small>Use an Android phone from your laptop over the same Wi-Fi, with sound and the phone display turned off.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a> }
         <a class="tool-row surface" routerLink="/tools/translate"><span class="tool-icon material-symbols-rounded">translate</span><span><strong>Translator</strong><small>Translate text between languages and recognize text from a selected screen region on Windows.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a>
       </section>
     </div>

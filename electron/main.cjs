@@ -10,6 +10,7 @@ const { autoUpdater } = require('electron-updater');
 const { VPN_CONNECTION_MODES, buildVpnConfig } = require('./vpn-config.cjs');
 const { updateFeed } = require('./update-config.cjs');
 const { closeAllCards } = require('./card-manager.cjs');
+const { PhoneManager } = require('./phone-manager.cjs');
 
 function handleSquirrelEvent() {
   if (process.platform !== 'win32') return false;
@@ -73,6 +74,15 @@ let updateStatus = {
   version: null,
   percent: null,
 };
+
+const phoneManager = new PhoneManager({
+  runtimeDirectory: phoneRuntimeDirectory(),
+  onStatus: (status) => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('phone:status', status);
+    }
+  },
+});
 
 const preload = path.join(__dirname, 'preload.cjs');
 const credentialFile = () => path.join(app.getPath('userData'), 'credentials.bin');
@@ -225,6 +235,10 @@ async function writeVpnConfig(profile, mode) {
   const config = buildVpnConfig(profile, mode, VPN_PORT);
   await fs.mkdir(vpnDirectory(), { recursive: true });
   await fs.writeFile(vpnConfigFile(), JSON.stringify(config, null, 2), { mode: 0o600 });
+}
+
+function phoneRuntimeDirectory() {
+  return app.isPackaged ? path.join(process.resourcesPath, 'phone-core') : path.join(__dirname, '..', 'build', 'phone-core');
 }
 
 function setUpdateStatus(patch) {
@@ -564,6 +578,7 @@ async function cleanupBeforeUpdate() {
   if (updateInstallRequested) return;
   updateInstallRequested = true;
   isQuitting = true;
+  phoneManager.dispose();
   if (vpnProcess || vpnStatus.state === 'connected') await disconnectVpn().catch(() => {});
   quitAfterCleanup = true;
 }
@@ -792,6 +807,12 @@ ipcMain.handle('updater:download', () => downloadAppUpdate());
 ipcMain.handle('updater:install', () => installAppUpdate());
 ipcMain.handle('translator:translate', (_event, text, source, target) => translateText(text, source, target));
 ipcMain.handle('translator:capture-region', (event) => captureScreenRegion(event));
+ipcMain.handle('phone:status', () => phoneManager.getStatus());
+ipcMain.handle('phone:connect', (_event, options) => phoneManager.connect({ turnScreenOff: options?.turnScreenOff !== false }));
+ipcMain.handle('phone:start', (_event, options) => phoneManager.start({ turnScreenOff: options?.turnScreenOff !== false }));
+ipcMain.handle('phone:stop', () => phoneManager.stop());
+ipcMain.handle('phone:disconnect', () => phoneManager.disconnect());
+ipcMain.handle('phone:control', (_event, action) => phoneManager.control(action));
 
 if (hasSingleInstanceLock && !isSquirrelEvent) {
   app.on('second-instance', (_event, commandLine) => {
@@ -839,6 +860,7 @@ app.whenReady().then(async () => {
 });
 app.on('before-quit', (event) => {
   isQuitting = true;
+  phoneManager.dispose();
   if ((vpnProcess || vpnStatus.state === 'connected') && !quitAfterCleanup) {
     event.preventDefault();
     void disconnectVpn().finally(() => { quitAfterCleanup = true; app.quit(); });

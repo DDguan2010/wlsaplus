@@ -17,7 +17,10 @@ module.exports = {
     appCategoryType: 'public.app-category.education',
     osxSign,
     osxNotarize,
-    extraResource: [path.join(__dirname, 'build', 'vpn-core')],
+    extraResource: [
+      path.join(__dirname, 'build', 'vpn-core'),
+      ...(process.platform === 'win32' ? [path.join(__dirname, 'build', 'phone-core')] : []),
+    ],
     ignore: [
       /^\/android($|\/)/,
       /^\/node_modules($|\/)/,

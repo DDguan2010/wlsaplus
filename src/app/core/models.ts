@@ -134,6 +134,21 @@ export interface PlatformInfo {
   supportsDesktopCards: boolean;
   supportsVpn: boolean;
   supportsScreenTranslation: boolean;
+  supportsPhoneControl: boolean;
+}
+
+export type PhoneConnectionState = 'unsupported' | 'idle' | 'waiting-usb' | 'waiting-authorization' | 'configuring' | 'connecting' | 'ready' | 'mirroring' | 'stopping' | 'error';
+export type PhoneControlAction = 'back' | 'home' | 'recents' | 'power' | 'volume-up' | 'volume-down';
+
+export interface PhoneStatus {
+  state: PhoneConnectionState;
+  message: string;
+  deviceName: string | null;
+  serial: string | null;
+  ip: string | null;
+  androidVersion: string | null;
+  audioAvailable: boolean | null;
+  screenOff: boolean;
 }
 
 export type VpnConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnecting' | 'delegated' | 'error' | 'unavailable';

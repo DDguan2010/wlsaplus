@@ -3,6 +3,8 @@ import type {
   DesktopCardType,
   DesktopCardSettings,
   PlatformHttpResponse,
+  PhoneControlAction,
+  PhoneStatus,
   PowerSchoolCredentials,
   TranslationResult,
   UpdateStatus,
@@ -55,6 +57,15 @@ declare global {
       translator: {
         translate(text: string, source: string, target: string): Promise<TranslationResult>;
         captureRegion(): Promise<string | null>;
+      };
+      phone: {
+        status(): Promise<PhoneStatus>;
+        connect(options: { turnScreenOff: boolean }): Promise<PhoneStatus>;
+        start(options: { turnScreenOff: boolean }): Promise<PhoneStatus>;
+        stop(): Promise<PhoneStatus>;
+        disconnect(): Promise<PhoneStatus>;
+        control(action: PhoneControlAction): Promise<PhoneStatus>;
+        onStatus(callback: (status: PhoneStatus) => void): () => void;
       };
     };
   }

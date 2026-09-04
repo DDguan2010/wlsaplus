@@ -11,6 +11,13 @@ import type {
 
 const clean = (value: string | null | undefined): string => (value ?? '').replace(/\u00a0/g, ' ').replace(/\s+/g, ' ').trim();
 
+function htmlToPlainText(value: unknown): string {
+  const doc = new DOMParser().parseFromString(String(value ?? ''), 'text/html');
+  doc.querySelectorAll('script, style, template').forEach((element) => element.remove());
+  doc.querySelectorAll('br, p, div, li').forEach((element) => element.append(' '));
+  return clean(doc.body.textContent);
+}
+
 function localIso(dateCode: string, time: string): string {
   const match = clean(time).match(/(\d{1,2}):(\d{2})\s*(上午|下午|AM|PM)?/i);
   if (!match) return '';
@@ -282,7 +289,7 @@ function parseAssignments(value: unknown): AssignmentScore[] {
     return [{
       id: String(assignment['assignmentid'] ?? assignment['_id'] ?? `assignment-${index}`),
       name,
-      description: clean(String(section['description'] ?? '')),
+      description: htmlToPlainText(section['description']),
       dueDate: normalizeAssignmentDate(section['duedate']),
       category: clean(String(teacherCategory['name'] ?? teacherCategory['_name'] ?? '')),
       pointsEarned: numberOrNull(score['scorepoints']),

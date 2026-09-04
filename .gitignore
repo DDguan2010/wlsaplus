@@ -9,6 +9,7 @@ dist/
 out/
 out-builder/
 .tmp-angular/
+build/phone-core/
 android/.gradle/
 android/app/build/
 android/local.properties

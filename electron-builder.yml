@@ -11,6 +11,8 @@ files:
 extraResources:
   - from: build/vpn-core
     to: vpn-core
+  - from: build/phone-core
+    to: phone-core
 win:
   executableName: WLSAPlus
   icon: build/icon.ico

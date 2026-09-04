@@ -80,12 +80,12 @@ export class PlatformService {
   private detect(): PlatformInfo {
     if (window.wlsaplus) {
       const os = window.wlsaplus.platform.os;
-      return { kind: 'electron', os, supportsPowerSchool: true, supportsDesktopCards: os === 'windows', supportsVpn: os === 'windows' || os === 'macos', supportsScreenTranslation: os === 'windows' };
+      return { kind: 'electron', os, supportsPowerSchool: true, supportsDesktopCards: os === 'windows', supportsVpn: os === 'windows' || os === 'macos', supportsScreenTranslation: os === 'windows', supportsPhoneControl: os === 'windows' };
     }
     if (Capacitor.isNativePlatform()) {
-      return { kind: 'android', os: 'android', supportsPowerSchool: true, supportsDesktopCards: false, supportsVpn: true, supportsScreenTranslation: false };
+      return { kind: 'android', os: 'android', supportsPowerSchool: true, supportsDesktopCards: false, supportsVpn: true, supportsScreenTranslation: false, supportsPhoneControl: false };
     }
-    return { kind: 'web', os: 'web', supportsPowerSchool: true, supportsDesktopCards: false, supportsVpn: false, supportsScreenTranslation: false };
+    return { kind: 'web', os: 'web', supportsPowerSchool: true, supportsDesktopCards: false, supportsVpn: false, supportsScreenTranslation: false, supportsPhoneControl: false };
   }
 
   private webGatewayUrl(options: NativeRequest): string {
