@@ -73,7 +73,7 @@ import { PhoneService } from '../core/phone.service';
     </div>
   `,
   styles: `
-    .phone-page { max-width: 980px; }
+    .phone-page { max-width: 980px; } .back { margin-left: -10px; color: var(--app-text); text-decoration: none; }
     .connection { min-height: 116px; padding: 20px; display: grid; grid-template-columns: 58px minmax(0,1fr) auto; align-items: center; gap: 18px; }
     .status-icon { width: 58px; height: 58px; border-radius: 8px; background: var(--app-accent-soft); color: var(--app-accent); font-size: 31px; } .status-icon.active { background: var(--app-accent); color: var(--app-on-accent); }
     .connection-copy { min-width: 0; display: grid; gap: 5px; } .connection-copy strong { font-size: 18px; } .connection-copy > span { color: var(--app-muted); font-size: 13px; line-height: 1.45; } .connection-copy small { color: var(--app-accent); font-size: 12px; overflow-wrap: anywhere; }
