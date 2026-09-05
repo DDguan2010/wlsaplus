@@ -97,12 +97,31 @@ export interface ProgressSnapshot {
   attendanceEvents: AttendanceEvent[];
 }
 
+export const TODO_COLOR_OPTIONS = [
+  { value: 'red', label: 'Red' },
+  { value: 'orange', label: 'Orange' },
+  { value: 'yellow', label: 'Yellow' },
+  { value: 'green', label: 'Green' },
+  { value: 'blue', label: 'Blue' },
+  { value: 'purple', label: 'Purple' },
+  { value: 'pink', label: 'Pink' },
+] as const;
+
+export type TodoColor = typeof TODO_COLOR_OPTIONS[number]['value'];
+
 export interface TodoItem {
   id: string;
   title: string;
   details: string;
   createdAt: string;
   endAt: string | null;
+  color: TodoColor | null;
+}
+
+const TODO_COLORS = new Set<TodoColor>(TODO_COLOR_OPTIONS.map((option) => option.value));
+
+export function normalizeTodoColor(value: unknown): TodoColor | null {
+  return typeof value === 'string' && TODO_COLORS.has(value as TodoColor) ? value as TodoColor : null;
 }
 
 export function normalizeTodoEndAt(value: unknown): string | null {

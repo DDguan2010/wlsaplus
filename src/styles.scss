@@ -16,6 +16,13 @@
   --app-accent: #00677a;
   --app-accent-soft: #b9eaf4;
   --app-success: #176b52;
+  --task-red: #c43d4f;
+  --task-orange: #b65c12;
+  --task-yellow: #9a6b00;
+  --task-green: #287451;
+  --task-blue: #3569ad;
+  --task-purple: #7453ad;
+  --task-pink: #a94474;
 }
 
 :root.dark-theme {
@@ -34,7 +41,23 @@
   --app-accent: #79d7e8;
   --app-accent-soft: #174d58;
   --app-success: #76d4ad;
+  --task-red: #ff8994;
+  --task-orange: #f6a35d;
+  --task-yellow: #d9b84c;
+  --task-green: #70c99d;
+  --task-blue: #8db7f0;
+  --task-purple: #c0a4ef;
+  --task-pink: #ec93bb;
 }
+
+[data-task-color='red'] { --task-color: var(--task-red); --task-on-color: #ffffff; }
+[data-task-color='orange'] { --task-color: var(--task-orange); --task-on-color: #191c20; }
+[data-task-color='yellow'] { --task-color: var(--task-yellow); --task-on-color: #191c20; }
+[data-task-color='green'] { --task-color: var(--task-green); --task-on-color: #ffffff; }
+[data-task-color='blue'] { --task-color: var(--task-blue); --task-on-color: #ffffff; }
+[data-task-color='purple'] { --task-color: var(--task-purple); --task-on-color: #ffffff; }
+[data-task-color='pink'] { --task-color: var(--task-pink); --task-on-color: #ffffff; }
+.dark-theme [data-task-color] { --task-on-color: #191c20; }
 
 :root[data-app-color='blue'] {
   --app-accent: #315da8;

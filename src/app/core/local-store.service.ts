@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { normalizeTodoEndAt } from './models';
-import type { AppColor, AppSettings, ProgressCourse, ProgressSnapshot, ScheduleSnapshot, ThemeMode, TodoItem } from './models';
+import { normalizeTodoColor, normalizeTodoEndAt } from './models';
+import type { AppColor, AppSettings, ProgressCourse, ProgressSnapshot, ScheduleSnapshot, ThemeMode, TodoColor, TodoItem } from './models';
 
 const EMPTY_SCHEDULE: ScheduleSnapshot = {
   syncedAt: '',
@@ -58,7 +58,7 @@ export class LocalStore {
     this.write('schedule', value);
   }
 
-  addTodo(title: string, details = '', endAt: string | null = null): void {
+  addTodo(title: string, details = '', endAt: string | null = null, color: TodoColor | null = null): void {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
     const value: TodoItem = {
@@ -67,6 +67,7 @@ export class LocalStore {
       details: details.trim(),
       createdAt: new Date().toISOString(),
       endAt: normalizeTodoEndAt(endAt),
+      color: normalizeTodoColor(color),
     };
     this.todos.update((items) => [value, ...items]);
     this.write('todos', this.todos());
@@ -101,11 +102,17 @@ export class LocalStore {
     return updated;
   }
 
-  updateTodo(id: string, title: string, details = '', endAt?: string | null): boolean {
+  updateTodo(id: string, title: string, details = '', endAt?: string | null, color?: TodoColor | null): boolean {
     const trimmedTitle = title.trim();
     if (!trimmedTitle || !this.todos().some((item) => item.id === id)) return false;
     this.todos.update((items) => items.map((item) => item.id === id
-      ? { ...item, title: trimmedTitle, details: details.trim(), endAt: endAt === undefined ? item.endAt : normalizeTodoEndAt(endAt) }
+      ? {
+        ...item,
+        title: trimmedTitle,
+        details: details.trim(),
+        endAt: endAt === undefined ? item.endAt : normalizeTodoEndAt(endAt),
+        color: color === undefined ? item.color : normalizeTodoColor(color),
+      }
       : item));
     this.write('todos', this.todos());
     return true;
@@ -191,6 +198,7 @@ export class LocalStore {
         details: typeof item['details'] === 'string' ? item['details'].trim() : '',
         createdAt: item['createdAt'],
         endAt: normalizeTodoEndAt(item['endAt']),
+        color: normalizeTodoColor(item['color']),
       }];
     });
   }
