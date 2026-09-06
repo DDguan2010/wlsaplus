@@ -91,6 +91,19 @@ describe('LocalStore', () => {
     expect(store.todos()[0]).toMatchObject({ title: 'Final essay', details: 'Submit as PDF.' });
   });
 
+  it('reorders tasks and persists the new order', () => {
+    const store = new LocalStore();
+    store.addTodo('First task');
+    store.addTodo('Second task');
+
+    expect(store.todos().map((todo) => todo.title)).toEqual(['Second task', 'First task']);
+    expect(store.reorderTodos(0, 1)).toBe(true);
+    expect(store.todos().map((todo) => todo.title)).toEqual(['First task', 'Second task']);
+    expect(new LocalStore().todos().map((todo) => todo.title)).toEqual(['First task', 'Second task']);
+    expect(store.reorderTodos(-1, 0)).toBe(false);
+    expect(store.reorderTodos(0, 5)).toBe(false);
+  });
+
   it('adds, edits, preserves, and clears task end times', () => {
     const store = new LocalStore();
     store.addTodo('Draft essay', '', '2026-09-03T18:30:00.000Z');

@@ -1,5 +1,6 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -23,7 +24,7 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
 
 @Component({
   selector: 'app-home-page',
-  imports: [DatePipe, RouterLink, MatButtonModule, MatDialogModule, MatProgressBarModule, MatSnackBarModule, MatTooltipModule],
+  imports: [DatePipe, CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatDialogModule, MatProgressBarModule, MatSnackBarModule, MatTooltipModule],
   template: `
     <div class="page">
       <header class="page-header"><div><div class="eyebrow">{{ clock.now() | date:'EEEE, MMMM d' }}</div><h1 class="page-title">Overview</h1></div><a mat-icon-button class="header-icon-button" routerLink="/settings" aria-label="Open settings"><span class="material-symbols-rounded">settings</span></a></header>
@@ -93,9 +94,10 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
 
       <section class="todo-section">
         <div class="section-heading"><div><h2>Tasks</h2><span>{{ store.todos().length }} open</span></div><button mat-mini-fab (click)="addTodo()" aria-label="Add a task"><span class="material-symbols-rounded">add</span></button></div>
-        <div class="todo-list surface">
+        <div class="todo-list surface" cdkDropList cdkDropListLockAxis="y" [cdkDropListData]="store.todos()" [cdkDropListDisabled]="store.todos().length < 2" (cdkDropListDropped)="reorderTodos($event)">
           @for (todo of store.todos(); track todo.id) {
-            <div class="todo-row" [class.expanded]="expandedTodoId() === todo.id" [attr.data-task-color]="todo.color">
+            <div class="todo-row" cdkDrag cdkDragLockAxis="y" [cdkDragData]="todo" [class.expanded]="expandedTodoId() === todo.id" [attr.data-task-color]="todo.color">
+              <button mat-icon-button type="button" class="todo-drag-handle" cdkDragHandle [attr.aria-label]="'Drag to reorder ' + todo.title" matTooltip="Reorder task"><span class="material-symbols-rounded">drag_indicator</span></button>
               <button class="todo-circle" (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"></button>
               <div class="todo-main"><button class="todo-content" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id">
                   <span class="todo-title">@if (todo.icon) { <span class="todo-task-icon material-symbols-rounded">{{ todo.icon }}</span> }<strong>{{ todo.title }}</strong></span>
@@ -144,15 +146,17 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
     .timeline-entry[data-task-color], .timeline-point[data-task-color] { --timeline-entry-color: var(--task-color); } .timeline-entry span { min-width: 0; padding: 0 4px; overflow: hidden; font-size: 9px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; } .deadline-entry { background: color-mix(in srgb, var(--timeline-entry-color) 30%, var(--app-surface)); }
     .timeline-entry:focus-visible, .timeline-point:focus-visible { box-shadow: 0 0 0 2px var(--app-surface), 0 0 0 4px var(--timeline-entry-color); }
     .timeline-point { --timeline-entry-color: var(--app-accent); position: absolute; top: 4px; z-index: 2; width: 14px; height: 14px; display: grid; place-items: center; border-radius: 50%; outline: none; transform: translateX(-50%); } .timeline-point > span { width: 9px; height: 9px; border: 2px solid var(--app-surface); border-radius: 50%; background: var(--timeline-entry-color); box-shadow: 0 0 0 1px var(--timeline-entry-color); }
-    .todo-list { overflow: hidden; } .todo-row { width: 100%; min-height: 62px; padding: 8px 10px 8px 18px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid var(--app-border); background: transparent; color: var(--app-text); }
+    .todo-list { overflow: hidden; } .todo-row { width: 100%; min-height: 62px; padding: 8px 10px 8px 8px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--app-border); background: var(--app-surface); color: var(--app-text); }
     .todo-row[data-task-color] { border-bottom-color: color-mix(in srgb, var(--task-color) 34%, var(--app-border)); background: color-mix(in srgb, var(--task-color) 26%, var(--app-surface)); }
+    .todo-drag-handle { width: 30px; height: 40px; flex: 0 0 30px; color: var(--app-muted); cursor: grab; touch-action: none; } .todo-drag-handle:active { cursor: grabbing; } .todo-drag-handle .material-symbols-rounded { width: 19px; height: 19px; font-size: 19px; }
+    .todo-row.cdk-drag-preview { border: 1px solid var(--app-border); border-radius: 6px; box-shadow: 0 10px 24px rgb(0 0 0 / 18%); } .todo-row.cdk-drag-placeholder { opacity: .28; } .todo-row.cdk-drag-animating, .todo-list.cdk-drop-list-dragging .todo-row:not(.cdk-drag-placeholder) { transition: transform 180ms cubic-bezier(0, 0, .2, 1); }
     .todo-row:last-child { border-bottom: 0; } .todo-circle { width: 19px; height: 19px; flex: 0 0 19px; padding: 0; border: 2px solid var(--app-muted); border-radius: 50%; background: transparent; cursor: pointer; } .todo-row[data-task-color] .todo-circle { border-color: var(--task-color); } .todo-circle:hover { border-color: var(--task-color, var(--app-accent)); background: color-mix(in srgb, var(--task-color, var(--app-accent)) 16%, transparent); }
     .todo-main { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 7px; } .todo-content { width: 100%; min-width: 0; flex: 1; align-self: stretch; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 6px; padding: 4px 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; } .todo-title { width: 100%; display: flex; align-items: center; gap: 8px; } .todo-title strong { min-width: 0; overflow-wrap: anywhere; font-weight: 500; } .todo-task-icon { width: 21px; height: 21px; flex: 0 0 21px; color: var(--task-color, var(--app-accent)); font-size: 21px; } .todo-details { color: var(--app-muted); line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
     .todo-deadline { width: 100%; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; } .deadline-track { height: 4px; overflow: hidden; border-radius: 2px; background: var(--app-surface-raised); } .deadline-track span { display: block; height: 100%; background: var(--task-color, var(--app-accent)); } .todo-deadline time { color: var(--app-muted); font-size: 11px; white-space: nowrap; } .todo-deadline.overdue time { color: #ba1a1a; }
     .todo-time { display: inline-flex; align-items: center; gap: 6px; color: var(--task-color, var(--app-accent)); } .todo-time .material-symbols-rounded { width: 17px; height: 17px; font-size: 17px; } .todo-time time { font-size: 11px; font-weight: 500; }
     .todo-actions { display: flex; flex: 0 0 auto; } .todo-actions button { width: 40px; height: 40px; color: var(--app-muted); } .todo-actions .material-symbols-rounded { width: 20px; height: 20px; font-size: 20px; } .todo-actions button:hover { color: var(--app-text); }
     .compact { min-height: 130px; } .compact .material-symbols-rounded { font-size: 32px; }
-    @media (max-width: 580px) { .class-card { min-height: 400px; padding: 22px; } h2 { margin-top: 38px; } .facts { align-items: flex-start; flex-direction: column; gap: 10px; margin: 22px 0 30px; } .todo-row { gap: 10px; padding-left: 14px; } .todo-actions button { width: 36px; height: 40px; } }
+    @media (max-width: 580px) { .class-card { min-height: 400px; padding: 22px; } h2 { margin-top: 38px; } .facts { align-items: flex-start; flex-direction: column; gap: 10px; margin: 22px 0 30px; } .todo-row { gap: 8px; padding-left: 5px; } .todo-drag-handle { width: 28px; flex-basis: 28px; } .todo-actions button { width: 36px; height: 40px; } }
   `,
 })
 export class HomePage {
@@ -188,6 +192,7 @@ export class HomePage {
   });
   duration(session: ClassSession): number { return Math.round((new Date(session.endsAt).getTime() - new Date(session.startsAt).getTime()) / 60_000); }
   timelineColor(index: number): string { return this.timelineColors[index % this.timelineColors.length]; }
+  reorderTodos(event: CdkDragDrop<TodoItem[]>): void { this.store.reorderTodos(event.previousIndex, event.currentIndex); }
   changeTimelineZoom(delta: number, scroll: HTMLElement): void {
     const centeredTime = scroll.scrollWidth
       ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth

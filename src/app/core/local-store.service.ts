@@ -134,6 +134,21 @@ export class LocalStore {
     this.write('todos', this.todos());
   }
 
+  reorderTodos(previousIndex: number, currentIndex: number): boolean {
+    const items = this.todos();
+    if (!Number.isInteger(previousIndex) || !Number.isInteger(currentIndex)
+      || previousIndex < 0 || currentIndex < 0
+      || previousIndex >= items.length || currentIndex >= items.length
+      || previousIndex === currentIndex) return false;
+
+    const reordered = [...items];
+    const [moved] = reordered.splice(previousIndex, 1);
+    reordered.splice(currentIndex, 0, moved);
+    this.todos.set(reordered);
+    this.write('todos', reordered);
+    return true;
+  }
+
   updateSettings(patch: Partial<AppSettings>): void {
     this.settings.update((value) => ({ ...value, ...patch }));
     this.write('settings', this.settings());
