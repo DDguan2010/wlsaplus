@@ -51,6 +51,14 @@ contextBridge.exposeInMainWorld('wlsaplus', {
       : Promise.reject(new Error('Screen translation is available on Windows only.')),
   },
   phone: {
+    networkStatus: () => ipcRenderer.invoke('phone:network-status'),
+    signIn: () => ipcRenderer.invoke('phone:sign-in'),
+    switchAccount: () => ipcRenderer.invoke('phone:switch-account'),
+    onNetworkStatus: callback => {
+      const handler = (_event, status) => callback(status);
+      ipcRenderer.on('phone:network-status', handler);
+      return () => ipcRenderer.removeListener('phone:network-status', handler);
+    },
     status: () => ipcRenderer.invoke('phone:status'),
     connect: (options) => ipcRenderer.invoke('phone:connect', options),
     start: (options) => ipcRenderer.invoke('phone:start', options),

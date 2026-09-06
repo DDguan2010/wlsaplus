@@ -13,6 +13,9 @@ build/phone-core/
 android/.gradle/
 android/app/build/
 android/local.properties
+android/app/libs/phone-network.aar
+android/app/libs/phone-network-sources.jar
+android/app/src/main/assets/phone-network/
 *.keystore
 *.jks
 .env

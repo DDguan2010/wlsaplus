@@ -184,6 +184,16 @@ export interface PlatformInfo {
 export type PhoneConnectionState = 'unsupported' | 'idle' | 'waiting-usb' | 'waiting-authorization' | 'configuring' | 'connecting' | 'ready' | 'mirroring' | 'stopping' | 'error';
 export type PhoneControlAction = 'back' | 'home' | 'recents' | 'power' | 'volume-up' | 'volume-down';
 
+export interface PhoneNetworkStatus {
+  state: string;
+  active: number;
+  authUrl?: string;
+  pairedPhone?: string | null;
+  error?: string;
+  connectionError?: string;
+  tailnet?: string;
+}
+
 export interface PhoneStatus {
   state: PhoneConnectionState;
   message: string;

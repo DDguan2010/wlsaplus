@@ -12,6 +12,12 @@ import com.getcapacitor.annotation.CapacitorPlugin;
 @CapacitorPlugin(name = "WlsaTools")
 public class WlsaToolsPlugin extends Plugin {
     @PluginMethod
+    public void openPhoneReceiver(PluginCall call) {
+        getActivity().startActivity(new Intent(getContext(), PhoneReceiverActivity.class));
+        call.resolve();
+    }
+
+    @PluginMethod
     public void importVpn(PluginCall call) {
         String url = call.getString("url");
         String name = call.getString("name", "02VPN");

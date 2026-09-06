@@ -78,18 +78,30 @@ function commandError(error, fallback) {
   return new Error(detail ? `${fallback} ${detail}` : fallback);
 }
 
+function isOfflineError(error) {
+  return /\b(?:device )?offline\b|device .*not found|no devices\/emulators found|transport.*(?:closed|error)|connection (?:closed|reset)/i.test(error?.message || '');
+}
+
+function authorizationError() {
+  return Object.assign(new Error('Unlock the phone and allow USB debugging for this computer, then reconnect.'), { code: 'ADB_AUTHORIZATION' });
+}
+
 class PhoneManager {
-  constructor({ platform = process.platform, runtimeDirectory, onStatus = () => {}, exec = execFileAsync, spawnProcess = spawn } = {}) {
+  constructor({ platform = process.platform, runtimeDirectory, network, onStatus = () => {}, exec = execFileAsync, spawnProcess = spawn, sleep = delay } = {}) {
     this.platform = platform;
     this.runtimeDirectory = runtimeDirectory;
     this.onStatus = onStatus;
     this.exec = exec;
     this.spawnProcess = spawnProcess;
+    this.sleep = sleep;
+    this.network = network;
     this.scrcpyProcess = null;
     this.operation = null;
+    this.accountSwitch = null;
     this.lastError = '';
     this.lastDevice = null;
     this.stopping = false;
+    this.cancelled = false;
     this.status = {
       state: platform === 'win32' ? 'idle' : 'unsupported',
       message: platform === 'win32' ? 'Connect an Android phone by USB to begin.' : 'Phone control is available on Windows only.',
@@ -124,15 +136,68 @@ class PhoneManager {
     }
   }
 
+  async recoverUsb(serial) {
+    if (this.cancelled) throw new Error('Connection cancelled.');
+    this.setStatus({ state: 'configuring', message: 'Waiting for USB debugging to reconnect. Keep the phone unlocked and USB connected...' });
+    // Reconnect only this transport, never kill the shared ADB server.
+    await this.runAdb(['-s', serial, 'reconnect'], 5_000).catch(() => {});
+    for (let attempt = 0; attempt < 15; attempt++) {
+      if (this.cancelled) throw new Error('Connection cancelled.');
+      const { stdout } = await this.runAdb(['devices', '-l'], 5_000);
+      const device = parseAdbDevices(stdout).find(device => device.serial === serial);
+      if (device?.state === 'unauthorized') throw authorizationError();
+      if (device?.state === 'device') return;
+      await this.sleep(1_000);
+    }
+    throw Object.assign(new Error('USB debugging stayed offline. Unlock the phone, unplug and reconnect its USB cable, and approve the debugging prompt.'), { code: 'ADB_OFFLINE' });
+  }
+
+  async runUsbAdb(serial, args, timeout = 5_000) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (this.cancelled) throw new Error('Connection cancelled.');
+      try { return await this.runAdb(['-s', serial, ...args], timeout); }
+      catch (error) {
+        if (/unauthorized|authentication failed/i.test(error.message)) throw authorizationError();
+        if (!isOfflineError(error)) throw error;
+        if (attempt === 2) throw Object.assign(new Error('USB debugging keeps going offline. Reconnect the USB cable, keep the phone unlocked, and try again.'), { code: 'ADB_OFFLINE' });
+        await this.recoverUsb(serial);
+        await this.sleep(500);
+      }
+    }
+  }
+
+  async enableWirelessDebugging(serial) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const { stdout } = await this.runUsbAdb(serial, ['shell', 'getprop', 'service.adb.tcp.port']);
+      if (String(stdout).trim() === String(ADB_PORT)) return;
+      if (this.cancelled) throw new Error('Connection cancelled.');
+      try { await this.runAdb(['-s', serial, 'tcpip', String(ADB_PORT)], 5_000); }
+      catch (error) {
+        if (/unauthorized|authentication failed/i.test(error.message)) throw authorizationError();
+        if (!isOfflineError(error)) throw error;
+        // tcpip may succeed but drop its own response when adbd restarts.
+        // Verify the port after recovery instead of blindly restarting again.
+      }
+      await this.sleep(1_000);
+    }
+    const { stdout } = await this.runUsbAdb(serial, ['shell', 'getprop', 'service.adb.tcp.port']);
+    if (String(stdout).trim() !== String(ADB_PORT)) throw new Error('Android did not enable wireless debugging. Reconnect USB and check Developer options.');
+  }
+
   async findAuthorizedUsbDevice(timeout = 45_000) {
     const deadline = Date.now() + timeout;
     let previousState = '';
     while (Date.now() < deadline) {
+      if (this.cancelled) throw new Error('Connection cancelled.');
       const { stdout } = await this.runAdb(['devices', '-l']);
       const usbDevices = parseAdbDevices(stdout).filter((device) => !isWirelessSerial(device.serial) && !device.serial.startsWith('emulator-'));
       if (usbDevices.length > 1) throw new Error('More than one USB Android device is connected. Disconnect the extra device and try again.');
       const [device] = usbDevices;
       if (device?.state === 'device') return device;
+      if (device?.state === 'offline') {
+        await this.recoverUsb(device.serial);
+        continue;
+      }
 
       const nextState = device?.state === 'unauthorized' ? 'waiting-authorization' : 'waiting-usb';
       if (nextState !== previousState) {
@@ -141,17 +206,54 @@ class PhoneManager {
           : { state: nextState, message: 'Waiting for an Android phone connected by USB...' });
         previousState = nextState;
       }
-      await delay(1_000);
+      await this.sleep(1_000);
     }
     throw new Error(previousState === 'waiting-authorization'
       ? 'USB debugging was not authorized in time. Unlock the phone, allow this computer, and try again.'
       : 'No authorized USB Android phone was found. Check the cable and USB debugging, then try again.');
   }
 
+  async connectWireless(serial, attempts = 5) {
+    const secure = serial.startsWith('127.0.0.1:');
+    if (secure) attempts = Math.min(attempts, 3);
+    // ADB can retain an offline transport after adbd restarts in TCP mode.
+    await this.runAdb(['disconnect', serial], 5_000).catch(() => {});
+    let lastError = '';
+    for (let attempt = 0; attempt < attempts; attempt++) {
+      if (this.cancelled) throw new Error('Connection cancelled.');
+      try {
+        await this.runAdb(['connect', serial], secure ? 25_000 : 5_000);
+        const { stdout } = await this.runAdb(['-s', serial, 'get-state'], 5_000);
+        if (String(stdout).trim() === 'device' && !this.cancelled) return;
+        lastError = String(stdout).trim();
+      } catch (error) {
+        lastError = error.message;
+      }
+      if (/unauthorized|authentication failed/i.test(lastError)) {
+        throw authorizationError();
+      }
+      if (attempt < attempts - 1) {
+        await this.runAdb(['disconnect', serial], 5_000).catch(() => {});
+        await this.sleep(750);
+      }
+    }
+    await this.runAdb(['disconnect', serial], 5_000).catch(() => {});
+    if (serial.startsWith('127.0.0.1:') && this.network) {
+      const detail = this.network.getStatus().connectionError;
+      if (detail) throw new Error(detail);
+    }
+    throw new Error(serial.startsWith('127.0.0.1:')
+      ? 'The paired phone is unreachable. Enable Connect to computer on the phone and use the same Tailscale account. After a phone restart, reconnect USB. This network may also block Tailscale.'
+      : 'The phone is not responding over Wi-Fi. This Wi-Fi may block communication between devices. Keep USB connected and try Connect by USB again.');
+  }
+
   connect(options = {}) {
+    if (this.accountSwitch) return this.accountSwitch;
     if (this.operation) return this.operation;
+    this.cancelled = false;
     this.operation = this.connectInternal(options)
       .catch((error) => {
+        if (this.cancelled) return this.getStatus();
         this.setStatus({ state: 'error', message: error instanceof Error ? error.message : 'Could not connect to the phone.' });
         throw error;
       })
@@ -167,20 +269,22 @@ class PhoneManager {
     const device = await this.findAuthorizedUsbDevice();
     this.setStatus({ state: 'configuring', message: 'Reading phone and Wi-Fi information...' });
 
-    const [{ stdout: modelOutput }, { stdout: versionOutput }, { stdout: sdkOutput }, { stdout: routeOutput }, addressResult] = await Promise.all([
-      this.runAdb(['-s', device.serial, 'shell', 'getprop', 'ro.product.model']),
-      this.runAdb(['-s', device.serial, 'shell', 'getprop', 'ro.build.version.release']),
-      this.runAdb(['-s', device.serial, 'shell', 'getprop', 'ro.build.version.sdk']),
-      this.runAdb(['-s', device.serial, 'shell', 'ip', 'route']),
-      this.runAdb(['-s', device.serial, 'shell', 'ip', '-o', '-4', 'addr', 'show', 'wlan0']).catch(() => ({ stdout: '' })),
-    ]);
+    // Serialize USB reads so a transport recovery cannot interrupt other reads.
+    const { stdout: modelOutput } = await this.runUsbAdb(device.serial, ['shell', 'getprop', 'ro.product.model']);
+    const { stdout: versionOutput } = await this.runUsbAdb(device.serial, ['shell', 'getprop', 'ro.build.version.release']);
+    const { stdout: sdkOutput } = await this.runUsbAdb(device.serial, ['shell', 'getprop', 'ro.build.version.sdk']);
+    const optionalNetworkRead = async args => this.runUsbAdb(device.serial, args).catch(error => {
+      if (error.code === 'ADB_OFFLINE' || error.code === 'ADB_AUTHORIZATION' || this.cancelled) throw error;
+      return { stdout: '' };
+    });
+    const { stdout: routeOutput } = await optionalNetworkRead(['shell', 'ip', 'route']);
+    const addressResult = await optionalNetworkRead(['shell', 'ip', '-o', '-4', 'addr', 'show', 'wlan0']);
     const ip = parseWifiIpv4(`${addressResult.stdout}\n${routeOutput}`);
-    if (!ip) throw new Error('The phone has no private Wi-Fi address. Connect the phone and laptop to the same Wi-Fi, then try again.');
 
     const deviceName = String(modelOutput || device.model || 'Android phone').trim() || 'Android phone';
     const androidVersion = String(versionOutput || '').trim() || null;
     const sdk = Number.parseInt(String(sdkOutput || '').trim(), 10);
-    const wirelessSerial = `${ip}:${ADB_PORT}`;
+    let wirelessSerial = ip ? `${ip}:${ADB_PORT}` : null;
     this.setStatus({
       state: 'configuring',
       message: 'Enabling wireless debugging. Keep USB connected for a moment...',
@@ -191,21 +295,55 @@ class PhoneManager {
       serial: wirelessSerial,
     });
 
-    await this.runAdb(['-s', device.serial, 'tcpip', String(ADB_PORT)]);
-    await delay(1_200);
+    await this.enableWirelessDebugging(device.serial);
     this.setStatus({ state: 'connecting', message: `Connecting to ${deviceName} over Wi-Fi...` });
-    await this.runAdb(['connect', wirelessSerial], 20_000);
-    const { stdout: stateOutput } = await this.runAdb(['-s', wirelessSerial, 'get-state']);
-    if (String(stateOutput).trim() !== 'device') throw new Error('The phone did not accept the wireless ADB connection. Confirm both devices are on the same Wi-Fi.');
+    let paired = false;
+    try {
+      if (!wirelessSerial) throw new Error('No direct Wi-Fi address is available.');
+      await this.connectWireless(wirelessSerial, this.network ? 2 : 5);
+    } catch (error) {
+      if (!this.network || this.cancelled || error.code === 'ADB_AUTHORIZATION') throw error;
+      wirelessSerial = await this.pairedEndpoint(device.serial);
+      await this.connectWireless(wirelessSerial);
+      paired = true;
+    }
 
-    this.lastDevice = { serial: wirelessSerial, ip, deviceName, androidVersion, sdk };
+    this.lastDevice = { serial: wirelessSerial, ip, deviceName, androidVersion, sdk, paired };
     return this.launch(options);
   }
 
+  async pairedEndpoint(usbSerial) {
+    if (this.cancelled) throw new Error('Connection cancelled.');
+    this.setStatus({ state: 'configuring', message: 'Direct Wi-Fi is unavailable. Preparing the secure connection...' });
+    await this.network.start();
+    if (this.network.getStatus().state !== 'ready') {
+      this.setStatus({ state: 'configuring', message: 'Sign in below if requested. Keep USB connected while the secure connection starts.' });
+      const deadline = Date.now() + 180_000;
+      while (this.network.getStatus().state !== 'ready' && Date.now() < deadline) {
+        if (this.cancelled) throw new Error('Connection cancelled.');
+        if (this.network.getStatus().state === 'error' || this.network.getStatus().state === 'stopped') throw new Error('The secure connection stopped. Try connecting again.');
+        await this.sleep(1_000);
+      }
+      if (this.network.getStatus().state !== 'ready') throw new Error('Sign-in timed out. Connect by USB again after signing in.');
+    }
+    if (usbSerial && this.network.getStatus().pairedPhone && !this.network.matchesUsb(usbSerial)) throw new Error('A different phone is paired. Forget the saved phone on both devices before pairing this one.');
+    if (!this.network.getStatus().pairedPhone) {
+      if (!usbSerial) throw new Error('Keep USB connected and use Connect by USB once to approve the secure connection.');
+      const pairingAdb = (args, timeout) => args[0] === '-s' && args[1] === usbSerial && !args.includes('--remove')
+        ? this.runUsbAdb(usbSerial, args.slice(2), timeout)
+        : this.runAdb(args, timeout);
+      await this.network.pair(pairingAdb, usbSerial, message => this.setStatus({ state: 'configuring', message }), this.sleep);
+    }
+    return this.network.endpoint();
+  }
+
   start(options = {}) {
+    if (this.accountSwitch) return this.accountSwitch;
     if (this.operation) return this.operation;
+    this.cancelled = false;
     this.operation = this.startInternal(options)
       .catch((error) => {
+        if (this.cancelled) return this.getStatus();
         this.setStatus({ state: 'error', message: error instanceof Error ? error.message : 'Could not reopen the phone.' });
         throw error;
       })
@@ -215,16 +353,29 @@ class PhoneManager {
 
   async startInternal(options) {
     this.assertSupported();
+    if (!this.lastDevice && this.network) {
+      await this.network.load();
+      if (this.network.getStatus().pairedPhone) this.lastDevice = { deviceName: 'Android phone', paired: true, sdk: 0, ip: null, androidVersion: null };
+    }
     if (!this.lastDevice) throw new Error('Set up the phone by USB before reopening it wirelessly.');
     await this.stopProcess();
     this.setStatus({ state: 'connecting', message: `Reconnecting to ${this.lastDevice.deviceName}...`, screenOff: options.turnScreenOff !== false });
-    await this.runAdb(['connect', this.lastDevice.serial], 20_000);
-    const { stdout } = await this.runAdb(['-s', this.lastDevice.serial, 'get-state']);
-    if (String(stdout).trim() !== 'device') throw new Error('The phone is not reachable. Check that it is awake and on the same Wi-Fi.');
+    if (this.lastDevice.paired) this.lastDevice.serial = await this.pairedEndpoint();
+    try { await this.connectWireless(this.lastDevice.serial); }
+    catch (error) {
+      if (!this.network || this.lastDevice.paired || this.cancelled || error.code === 'ADB_AUTHORIZATION') throw error;
+      this.lastDevice.serial = await this.pairedEndpoint(); this.lastDevice.paired = true;
+      await this.connectWireless(this.lastDevice.serial);
+    }
+    if (!this.lastDevice.sdk) {
+      const { stdout } = await this.runAdb(['-s', this.lastDevice.serial, 'shell', 'getprop', 'ro.build.version.sdk']);
+      this.lastDevice.sdk = Number.parseInt(stdout, 10) || 0;
+    }
     return this.launch(options);
   }
 
   async launch(options) {
+    if (this.cancelled) throw new Error('Connection cancelled.');
     const device = this.lastDevice;
     if (!device) throw new Error('No wireless phone is configured.');
     this.lastError = '';
@@ -287,6 +438,11 @@ class PhoneManager {
 
   async stop() {
     this.assertSupported();
+    this.cancelled = true;
+    if (this.operation) {
+      await this.network?.dispose();
+      await this.operation.catch(() => {});
+    }
     this.setStatus({ state: 'stopping', message: 'Closing the phone window...' });
     await this.stopProcess();
     return this.setStatus(this.lastDevice
@@ -296,8 +452,12 @@ class PhoneManager {
 
   async disconnect() {
     this.assertSupported();
+    this.cancelled = true;
+    await this.network?.dispose();
+    if (this.operation) await this.operation.catch(() => {});
     await this.stopProcess();
     if (this.lastDevice) await this.runAdb(['disconnect', this.lastDevice.serial]).catch(() => {});
+    if (this.network) await this.network.forget();
     this.lastDevice = null;
     return this.setStatus({
       state: 'idle',
@@ -317,11 +477,33 @@ class PhoneManager {
     return this.getStatus();
   }
 
+  switchAccount() {
+    this.assertSupported();
+    if (!this.network) return Promise.reject(new Error('The secure phone connection component is unavailable.'));
+    if (this.accountSwitch) return this.accountSwitch;
+    this.accountSwitch = this.switchAccountInternal().finally(() => { this.accountSwitch = null; });
+    return this.accountSwitch;
+  }
+
+  async switchAccountInternal() {
+    try {
+      await this.disconnect();
+      this.setStatus({ state: 'configuring', message: 'Signing out of Tailscale...' });
+      await this.network.switchAccount();
+      return this.setStatus({ state: 'idle', message: 'Sign in to Tailscale below, then connect by USB to pair again. Forget the previous pairing on the phone too.' });
+    } catch (error) {
+      this.setStatus({ state: 'error', message: error.message || 'Could not switch Tailscale accounts.' });
+      throw error;
+    }
+  }
+
   dispose() {
+    this.cancelled = true;
     this.stopping = true;
     const child = this.scrcpyProcess;
     this.scrcpyProcess = null;
     if (child && child.exitCode === null) child.kill();
+    void this.network?.dispose();
   }
 }
 

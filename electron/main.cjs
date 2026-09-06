@@ -11,6 +11,7 @@ const { VPN_CONNECTION_MODES, buildVpnConfig } = require('./vpn-config.cjs');
 const { updateFeed } = require('./update-config.cjs');
 const { closeAllCards } = require('./card-manager.cjs');
 const { PhoneManager } = require('./phone-manager.cjs');
+const { PhoneNetwork, validLoginUrl } = require('./phone-network.cjs');
 const { validateExternalHelpUrl } = require('./external-links.cjs');
 
 function handleSquirrelEvent() {
@@ -76,7 +77,17 @@ let updateStatus = {
   percent: null,
 };
 
+const phoneNetwork = new PhoneNetwork({
+  directory: path.join(app.getPath('userData'), process.env.WLSAPLUS_PHONE_ANDROID_PACKAGE === 'cn.org.wlsash.wlsaplus.phonepreview' ? 'phone-network-preview' : 'phone-network'),
+  runtimeDirectory: phoneRuntimeDirectory(), safeStorage,
+  onStatus: status => {
+    for (const win of BrowserWindow.getAllWindows()) {
+      if (!win.isDestroyed()) win.webContents.send('phone:network-status', status);
+    }
+  },
+});
 const phoneManager = new PhoneManager({
+  network: phoneNetwork,
   runtimeDirectory: phoneRuntimeDirectory(),
   onStatus: (status) => {
     for (const win of BrowserWindow.getAllWindows()) {
@@ -819,6 +830,17 @@ ipcMain.handle('updater:install', () => installAppUpdate());
 ipcMain.handle('translator:translate', (_event, text, source, target) => translateText(text, source, target));
 ipcMain.handle('translator:capture-region', (event) => captureScreenRegion(event));
 ipcMain.handle('phone:status', () => phoneManager.getStatus());
+ipcMain.handle('phone:network-status', async () => {
+  if (process.platform !== 'win32') return { state: 'stopped', active: 0 };
+  await phoneNetwork.load(); return phoneNetwork.getStatus();
+});
+ipcMain.handle('phone:sign-in', async () => {
+  phoneManager.assertSupported();
+  const url = phoneNetwork.getStatus().authUrl;
+  if (!validLoginUrl(url)) throw new Error('The sign-in link is not ready. Try connecting again.');
+  await shell.openExternal(url);
+});
+ipcMain.handle('phone:switch-account', () => phoneManager.switchAccount());
 ipcMain.handle('phone:connect', (_event, options) => phoneManager.connect({ turnScreenOff: options?.turnScreenOff !== false }));
 ipcMain.handle('phone:start', (_event, options) => phoneManager.start({ turnScreenOff: options?.turnScreenOff !== false }));
 ipcMain.handle('phone:stop', () => phoneManager.stop());

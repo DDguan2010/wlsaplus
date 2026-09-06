@@ -8,6 +8,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { CredentialVault } from '../core/credential-vault.service';
 import { PlatformService } from '../core/platform.service';
 import { PowerSchoolService } from '../core/powerschool.service';
+import { PhoneReceiverService } from '../core/phone-receiver.service';
 
 @Component({
   selector: 'app-connect-page',
@@ -32,6 +33,7 @@ import { PowerSchoolService } from '../core/powerschool.service';
           @if (hasSaved()) { <button mat-button type="button" (click)="openCached()">Open cached schedule</button> }
           @if (!platform.info.supportsPowerSchool && !hasSaved()) { <button mat-button type="button" (click)="openCached()">Continue offline</button> }
         </form>
+        @if (platform.info.kind === 'android') { <button mat-stroked-button type="button" (click)="receiver.open()"><span class="material-symbols-rounded">phonelink</span>Connect to computer</button> }
       </section>
     </main>
   `,
@@ -53,6 +55,7 @@ export class ConnectPage implements OnInit {
   private readonly vault = inject(CredentialVault);
   private readonly router = inject(Router);
   readonly platform = inject(PlatformService);
+  readonly receiver = inject(PhoneReceiverService);
   readonly loading = signal(false);
   readonly error = signal('');
   readonly showPassword = signal(false);

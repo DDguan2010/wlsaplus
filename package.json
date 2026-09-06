@@ -19,13 +19,16 @@
     "icons:generate": "node scripts/generate-icons.mjs",
     "vpn:core": "node scripts/download-vpn-core.mjs",
     "phone:core": "node scripts/download-phone-core.mjs",
-    "electron:dev": "npm run vpn:core && npm run phone:core && concurrently -k \"ng serve\" \"wait-on http://localhost:4200 && cross-env WLSAPLUS_DEV_URL=http://localhost:4200 electron .\"",
-    "electron:start": "npm run vpn:core && npm run phone:core && npm run build:web && electron .",
-    "electron:make": "npm run vpn:core && npm run phone:core && npm run build:web && electron-forge make",
-    "electron:make:windows": "npm run vpn:core && npm run phone:core && npm run build:web && electron-builder --win nsis --x64 --publish never",
+    "phone:network": "node scripts/build-phone-network.mjs",
+    "phone:network:android": "node scripts/build-phone-network.mjs --android",
+    "electron:dev:phone-preview": "cross-env WLSAPLUS_PHONE_ANDROID_PACKAGE=cn.org.wlsash.wlsaplus.phonepreview npm run electron:dev",
+    "electron:dev": "npm run vpn:core && npm run phone:core && npm run phone:network && concurrently -k \"ng serve\" \"wait-on http://localhost:4200 && cross-env WLSAPLUS_DEV_URL=http://localhost:4200 electron .\"",
+    "electron:start": "npm run vpn:core && npm run phone:core && npm run phone:network && npm run build:web && electron .",
+    "electron:make": "npm run vpn:core && npm run phone:core && npm run phone:network && npm run build:web && electron-forge make",
+    "electron:make:windows": "npm run vpn:core && npm run phone:core && npm run phone:network && npm run build:web && electron-builder --win nsis --x64 --publish never",
     "capacitor:sync": "npm run build:web && node scripts/prepare-android-build.mjs && cap sync android",
     "android:open": "npm run capacitor:sync && cap open android",
-    "android:build": "npm run capacitor:sync && cd android && gradlew.bat assembleDebug"
+    "android:build": "npm run phone:network:android && npm run capacitor:sync && cd android && gradlew.bat assembleDebug"
   },
   "dependencies": {
     "@angular/cdk": "^22.1.4",

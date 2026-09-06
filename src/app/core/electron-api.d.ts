@@ -5,6 +5,7 @@ import type {
   PlatformHttpResponse,
   PhoneControlAction,
   PhoneStatus,
+  PhoneNetworkStatus,
   PowerSchoolCredentials,
   TranslationResult,
   UpdateStatus,
@@ -62,6 +63,10 @@ declare global {
         captureRegion(): Promise<string | null>;
       };
       phone: {
+        networkStatus(): Promise<PhoneNetworkStatus>;
+      signIn(): Promise<void>;
+      switchAccount(): Promise<PhoneStatus>;
+        onNetworkStatus(callback: (status: PhoneNetworkStatus) => void): () => void;
         status(): Promise<PhoneStatus>;
         connect(options: { turnScreenOff: boolean }): Promise<PhoneStatus>;
         start(options: { turnScreenOff: boolean }): Promise<PhoneStatus>;

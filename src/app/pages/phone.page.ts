@@ -4,6 +4,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatDialog } from '@angular/material/dialog';
+import { ConfirmDialogComponent } from '../shared/text-dialog.component';
 import type { PhoneControlAction } from '../core/models';
 import { PhoneService } from '../core/phone.service';
 
@@ -29,15 +31,29 @@ import { PhoneService } from '../core/phone.service';
           }
         </div>
         <div class="connection-actions">
-          @if (status().state === 'mirroring') {
+          @if (switchingAccount()) {
+            <button mat-stroked-button disabled><span class="material-symbols-rounded" aria-hidden="true">sync</span>Switching account</button>
+          } @else if (working() && status().state !== 'stopping') {
+            <button mat-stroked-button (click)="stop()"><span class="material-symbols-rounded" aria-hidden="true">close</span>Cancel</button>
+          } @else if (status().state === 'mirroring') {
             <button mat-flat-button (click)="stop()" [disabled]="working()"><span class="material-symbols-rounded">stop_circle</span>Close phone</button>
           } @else if (canReopen()) {
             <button mat-flat-button (click)="start()" [disabled]="working()"><span class="material-symbols-rounded">smartphone</span>Open wirelessly</button>
           } @else {
             <button mat-flat-button (click)="connect()" [disabled]="working()"><span class="material-symbols-rounded">usb</span>{{ working() ? 'Connecting' : 'Connect by USB' }}</button>
           }
+          @if (!working() && status().state === 'error' && canReopen()) { <button mat-stroked-button (click)="connect()"><span class="material-symbols-rounded">usb</span>Connect by USB</button> }
         </div>
       </section>
+
+      @if (status().state !== 'unsupported') {
+        <section class="network-status" aria-live="polite">
+          <span class="material-symbols-rounded">encrypted</span>
+          <div><strong>Secure connection</strong><span>{{ networkLabel() }}</span></div>
+          @if (network().authUrl && !switchingAccount()) { <button mat-stroked-button (click)="signIn()"><span class="material-symbols-rounded" aria-hidden="true">login</span>Sign in</button> }
+          <button mat-stroked-button (click)="switchAccount()" [disabled]="working()"><span class="material-symbols-rounded" aria-hidden="true">switch_account</span>Switch account</button>
+        </section>
+      }
 
       @if (status().state === 'mirroring') {
         <section>
@@ -57,7 +73,7 @@ import { PhoneService } from '../core/phone.service';
         <div class="setup-list surface">
           <div class="setup-step"><span class="step-number">1</span><div><strong>Enable USB debugging</strong><span>On the Android phone, enable Developer options and USB debugging.</span></div></div>
           <div class="setup-step"><span class="step-number">2</span><div><strong>Connect and authorize</strong><span>Connect the phone by USB, unlock it, then allow this computer on the debugging prompt.</span></div></div>
-          <div class="setup-step"><span class="step-number">3</span><div><strong>Use the same Wi-Fi</strong><span>Connect the phone and laptop to the same Wi-Fi. WLSAPlus finds the phone address and switches it to wireless mode.</span></div></div>
+          <div class="setup-step"><span class="step-number">3</span><div><strong>Connect wirelessly</strong><span>Keep USB connected until the phone window opens. If Wi-Fi blocks the connection, sign in to the same personal Tailscale account on both devices and approve the matching code in the Android WLSAPlus app.</span></div></div>
         </div>
       </section>
 
@@ -66,7 +82,7 @@ import { PhoneService } from '../core/phone.service';
         <div class="settings-list surface">
           <div class="setting"><div><strong>Turn off the phone display</strong><span>The computer view stays active while the physical phone screen is black.</span></div><mat-slide-toggle [checked]="turnScreenOff()" (change)="setTurnScreenOff($event.checked)" [disabled]="working() || status().state === 'mirroring'"></mat-slide-toggle></div>
           <div class="setting"><div><strong>Sound</strong><span>@if (status().audioAvailable === false) { This phone needs Android 11 or newer for audio. } @else { Sound starts automatically on Android 11 or newer. Keep Android 11 phones unlocked while opening the mirror. }</span></div><span class="material-symbols-rounded feature-state">{{ status().audioAvailable === false ? 'volume_off' : 'volume_up' }}</span></div>
-          @if (status().serial) {
+          @if (status().serial || network().pairedPhone) {
             <div class="setting"><div><strong>Wireless device</strong><span>{{ status().serial }}</span></div><button mat-stroked-button (click)="disconnect()" [disabled]="working()"><span class="material-symbols-rounded">link_off</span>Forget</button></div>
           }
         </div>
@@ -74,6 +90,11 @@ import { PhoneService } from '../core/phone.service';
     </div>
   `,
   styles: `
+    .connection-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .network-status { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; padding: 16px 0; border-bottom: 1px solid var(--app-border); }
+    .network-status button { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .network-status button .material-symbols-rounded { font-size: 19px; }
+    .network-status > div { display: grid; gap: 4px; flex: 1; min-width: 200px; } .network-status > div > span { font-size: 13px; color: var(--app-muted); overflow-wrap: anywhere; }
     .phone-page { max-width: 980px; } .back { margin-left: -10px; color: var(--app-text); text-decoration: none; } .guide-link { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; } .guide-link .material-symbols-rounded { font-size: 18px; }
     .connection { min-height: 116px; padding: 20px; display: grid; grid-template-columns: 58px minmax(0,1fr) auto; align-items: center; gap: 18px; }
     .status-icon { width: 58px; height: 58px; border-radius: 8px; background: var(--app-accent-soft); color: var(--app-accent); font-size: 31px; } .status-icon.active { background: var(--app-accent); color: var(--app-on-accent); }
@@ -89,11 +110,25 @@ import { PhoneService } from '../core/phone.service';
 export class PhonePage {
   private readonly phone = inject(PhoneService);
   private readonly snack = inject(MatSnackBar);
+  private readonly dialog = inject(MatDialog);
+  readonly switchingAccount = signal(false);
+  private accountDialogOpen = false;
   readonly status = this.phone.status;
+  readonly network = this.phone.network;
+  readonly networkLabel = computed(() => {
+    const status = this.network();
+    if (this.switchingAccount() || status.state === 'switching-account') return 'Switching Tailscale account...';
+    if (status.state === 'stopped') return 'Not connected';
+    if (status.authUrl) return 'Sign in with the same personal Tailscale account used on your phone.';
+    if (status.state === 'needs-approval') return 'Approve this device in your Tailscale account.';
+    if (status.connectionError) return status.connectionError;
+    if (status.state === 'ready') return `${status.pairedPhone ? 'Phone paired' : 'Ready for phone approval'}${status.tailnet ? ` | ${status.tailnet}` : ''}`;
+    return status.error || 'Connecting to Tailscale...';
+  });
   readonly turnScreenOff = signal(localStorage.getItem('wlsaplus:phone-screen-off') !== 'false');
   readonly guideUrl = 'https://wlsaplus.02studio.xyz/blog/set-up-phone-control-on-windows/';
-  readonly working = computed(() => ['waiting-usb', 'waiting-authorization', 'configuring', 'connecting', 'stopping'].includes(this.status().state));
-  readonly canReopen = computed(() => Boolean(this.status().serial) && ['ready', 'error'].includes(this.status().state));
+  readonly working = computed(() => this.switchingAccount() || ['waiting-usb', 'waiting-authorization', 'configuring', 'connecting', 'stopping'].includes(this.status().state));
+  readonly canReopen = computed(() => Boolean(this.status().serial || this.network().pairedPhone) && ['idle', 'ready', 'error'].includes(this.status().state));
   readonly controls: { action: PhoneControlAction; label: string; icon: string }[] = [
     { action: 'back', label: 'Back', icon: 'arrow_back' },
     { action: 'home', label: 'Home', icon: 'home' },
@@ -135,6 +170,22 @@ export class PhonePage {
   }
 
   async connect(): Promise<void> { await this.run(() => this.phone.connect(this.turnScreenOff())); }
+  async signIn(): Promise<void> { await this.run(() => this.phone.signIn()); }
+  switchAccount(): void {
+    if (this.accountDialogOpen || this.working()) return;
+    this.accountDialogOpen = true;
+    this.dialog.open(ConfirmDialogComponent, { data: {
+      title: 'Switch Tailscale account?',
+      message: 'This closes phone control, signs out of Tailscale, and removes this computer\'s saved phone pairing. School data and tasks are unchanged. After signing in, forget the old pairing on the phone and pair again by USB.',
+      action: 'Switch account',
+    } }).afterClosed().subscribe(async confirmed => {
+      this.accountDialogOpen = false;
+      if (!confirmed) return;
+      this.switchingAccount.set(true);
+      try { await this.run(() => this.phone.switchAccount()); }
+      finally { this.switchingAccount.set(false); }
+    });
+  }
   async start(): Promise<void> { await this.run(() => this.phone.start(this.turnScreenOff())); }
   async stop(): Promise<void> { await this.run(() => this.phone.stop()); }
   async disconnect(): Promise<void> { await this.run(() => this.phone.disconnect()); }
