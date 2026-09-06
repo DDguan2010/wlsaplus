@@ -7,7 +7,14 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ClockService } from '../core/clock.service';
-import { buildHomeTimeline } from '../core/home-timeline';
+import {
+  buildHomeTimeline,
+  clampHomeTimelineZoom,
+  homeTimelineScrollLeft,
+  HOME_TIMELINE_BASE_WIDTH,
+  HOME_TIMELINE_MAX_ZOOM,
+  HOME_TIMELINE_MIN_ZOOM,
+} from '../core/home-timeline';
 import { LocalStore } from '../core/local-store.service';
 import { todoDeadlineProgress } from '../core/models';
 import type { ClassSession, TodoItem } from '../core/models';
@@ -36,10 +43,17 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
       </a>
 
       <section class="timeline-section">
-        <div class="section-heading timeline-heading"><div><h2>Timeline</h2><span>{{ clock.now() | date:'MMM d, HH:mm' }} to {{ timeline().endsAt | date:'MMM d, HH:mm' }}</span></div></div>
+        <div class="section-heading timeline-heading">
+          <div><h2>Timeline</h2><span>{{ clock.now() | date:'MMM d, HH:mm' }} to {{ timeline().endsAt | date:'MMM d, HH:mm' }}</span></div>
+          <div class="timeline-zoom" aria-label="Timeline zoom controls">
+            <button mat-icon-button type="button" (click)="changeTimelineZoom(-25, timelineScroll)" [disabled]="timelineZoom() === minTimelineZoom" aria-label="Zoom timeline out" matTooltip="Show more time"><span class="material-symbols-rounded">zoom_out</span></button>
+            <output aria-live="polite" [attr.aria-label]="'Timeline zoom ' + timelineZoom() + ' percent'">{{ timelineZoom() }}%</output>
+            <button mat-icon-button type="button" (click)="changeTimelineZoom(25, timelineScroll)" [disabled]="timelineZoom() === maxTimelineZoom" aria-label="Zoom timeline in" matTooltip="Show more detail"><span class="material-symbols-rounded">zoom_in</span></button>
+          </div>
+        </div>
         <div class="timeline-frame surface">
-          <div class="timeline-scroll">
-            <div class="timeline-canvas">
+          <div #timelineScroll class="timeline-scroll">
+            <div class="timeline-canvas" [style.width.px]="timelineWidth()">
               <div class="timeline-axis">
                 @for (tick of timeline().ticks; track tick.at; let first = $first; let last = $last) {
                   <time [style.left.%]="tick.left" [class.first]="first" [class.last]="last">{{ first ? 'Now' : (tick.at | date:'EEE, MMM d') }}</time>
@@ -120,7 +134,8 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
     .clear-state { margin: auto; text-align: center; } .clear-state .material-symbols-rounded { font-size: 54px; } .clear-state h2 { margin: 12px 0 6px; } .clear-state p { margin: 0; opacity: .8; }
     .timeline-section, .todo-section { margin-top: 34px; } .section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
     .section-heading h2 { margin: 0; color: var(--app-text); font-size: 22px; } .section-heading span { color: var(--app-muted); font-size: 13px; }
-    .timeline-frame { overflow: hidden; } .timeline-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; } .timeline-canvas { width: 1680px; padding: 0 10px 6px; }
+    .timeline-heading { gap: 12px; } .timeline-zoom { display: flex; flex: 0 0 auto; align-items: center; gap: 2px; } .timeline-zoom button { width: 32px; height: 32px; padding: 0 !important; display: inline-grid !important; place-items: center; } .timeline-zoom .material-symbols-rounded { width: 19px; height: 19px; font-size: 19px; } .timeline-zoom output { width: 42px; color: var(--app-muted); font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+    .timeline-frame { overflow: hidden; } .timeline-scroll { overflow-x: auto; overscroll-behavior-x: contain; scrollbar-width: thin; } .timeline-canvas { min-width: 100%; box-sizing: border-box; padding: 0 10px 6px; }
     .timeline-axis { position: relative; height: 32px; margin: 0 2px; border-bottom: 1px solid var(--app-border); } .timeline-axis time { position: absolute; bottom: 7px; color: var(--app-muted); font-size: 9px; white-space: nowrap; transform: translateX(-50%); } .timeline-axis time.first { color: var(--app-accent); font-weight: 700; transform: none; } .timeline-axis time.last { transform: translateX(-100%); }
     .timeline-body { position: relative; } .timeline-now { position: absolute; inset: 0 auto 0 2px; z-index: 3; width: 2px; background: var(--app-accent); pointer-events: none; }
     .timeline-group-label { position: sticky; left: 6px; z-index: 4; width: max-content; height: 20px; display: flex; align-items: center; gap: 4px; padding: 0 5px; background: color-mix(in srgb, var(--app-surface) 92%, transparent); color: var(--app-muted); font-size: 9px; font-weight: 700; text-transform: uppercase; } .timeline-group-label .material-symbols-rounded { font-size: 13px; }
@@ -146,6 +161,10 @@ export class HomePage {
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   readonly expandedTodoId = signal<string | null>(null);
+  readonly minTimelineZoom = HOME_TIMELINE_MIN_ZOOM;
+  readonly maxTimelineZoom = HOME_TIMELINE_MAX_ZOOM;
+  readonly timelineZoom = signal(100);
+  readonly timelineWidth = computed(() => HOME_TIMELINE_BASE_WIDTH * this.timelineZoom() / 100);
   readonly timeline = computed(() => buildHomeTimeline(this.store.schedule().sessions, this.store.todos(), this.clock.now().getTime()));
   private readonly timelineColors = ['#3569ad', '#287451', '#7453ad', '#b65c12', '#c43d4f', '#14747b', '#a94474'];
   private readonly ordered = computed(() => [...this.store.schedule().sessions].sort((a, b) => a.startsAt.localeCompare(b.startsAt)));
@@ -169,6 +188,18 @@ export class HomePage {
   });
   duration(session: ClassSession): number { return Math.round((new Date(session.endsAt).getTime() - new Date(session.startsAt).getTime()) / 60_000); }
   timelineColor(index: number): string { return this.timelineColors[index % this.timelineColors.length]; }
+  changeTimelineZoom(delta: number, scroll: HTMLElement): void {
+    const centeredTime = scroll.scrollWidth
+      ? (scroll.scrollLeft + scroll.clientWidth / 2) / scroll.scrollWidth
+      : 0;
+    const nextZoom = clampHomeTimelineZoom(this.timelineZoom() + delta);
+    if (nextZoom === this.timelineZoom()) return;
+
+    this.timelineZoom.set(nextZoom);
+    requestAnimationFrame(() => {
+      scroll.scrollLeft = homeTimelineScrollLeft(centeredTime, scroll.scrollWidth, scroll.clientWidth);
+    });
+  }
   addTodo(): void {
     this.dialog.open(TextDialogComponent, { data: { mode: 'add' } }).afterClosed().subscribe((value: TaskDialogResult | undefined) => {
       if (value) this.store.addTodo(value.title, value.details, value.endAt, value.color, value.icon, value.timeType);

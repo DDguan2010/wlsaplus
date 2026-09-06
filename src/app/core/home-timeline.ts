@@ -2,6 +2,18 @@ import type { ClassSession, TodoColor, TodoItem } from './models';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const HOME_TIMELINE_RANGE_MS = 7 * DAY_MS;
+export const HOME_TIMELINE_BASE_WIDTH = 1680;
+export const HOME_TIMELINE_MIN_ZOOM = 50;
+export const HOME_TIMELINE_MAX_ZOOM = 200;
+
+export function clampHomeTimelineZoom(zoom: number): number {
+  return Math.max(HOME_TIMELINE_MIN_ZOOM, Math.min(HOME_TIMELINE_MAX_ZOOM, zoom));
+}
+
+export function homeTimelineScrollLeft(center: number, scrollWidth: number, clientWidth: number): number {
+  const maxScroll = Math.max(0, scrollWidth - clientWidth);
+  return Math.max(0, Math.min(maxScroll, center * scrollWidth - clientWidth / 2));
+}
 
 export interface HomeTimelineEntry {
   id: string;

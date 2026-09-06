@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { buildHomeTimeline, HOME_TIMELINE_RANGE_MS, packLanes } from './home-timeline';
+import {
+  buildHomeTimeline,
+  clampHomeTimelineZoom,
+  homeTimelineScrollLeft,
+  HOME_TIMELINE_RANGE_MS,
+  packLanes,
+} from './home-timeline';
 import type { ClassSession, TodoItem } from './models';
 
 const NOW = Date.parse('2026-09-06T08:00:00.000Z');
@@ -40,5 +46,14 @@ describe('home timeline', () => {
     expect(lanes).toHaveLength(2);
     expect(lanes[0].map((item) => item.id)).toEqual(['one', 'three']);
     expect(lanes[1].map((item) => item.id)).toEqual(['two']);
+  });
+
+  it('limits zoom and keeps the centered time visible as density changes', () => {
+    expect(clampHomeTimelineZoom(25)).toBe(50);
+    expect(clampHomeTimelineZoom(125)).toBe(125);
+    expect(clampHomeTimelineZoom(225)).toBe(200);
+    expect(homeTimelineScrollLeft(0.5, 3360, 1000)).toBe(1180);
+    expect(homeTimelineScrollLeft(0, 3360, 1000)).toBe(0);
+    expect(homeTimelineScrollLeft(1, 3360, 1000)).toBe(2360);
   });
 });
