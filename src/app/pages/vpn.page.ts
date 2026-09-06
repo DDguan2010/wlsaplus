@@ -13,7 +13,7 @@ import { VpnService } from '../core/vpn.service';
   imports: [DatePipe, RouterLink, MatButtonModule, MatButtonToggleModule, MatProgressSpinnerModule],
   template: `
     <div class="page tool-page">
-      <header class="page-header"><a class="back icon-button" routerLink="/tools" aria-label="Back to tools"><span class="material-symbols-rounded">arrow_back</span></a><div><h1 class="page-title">VPN</h1><span>02VPN</span></div></header>
+      <header class="page-header"><a class="back icon-button" routerLink="/tools" aria-label="Back to tools"><span class="material-symbols-rounded">arrow_back</span></a><div><h1 class="page-title">VPN</h1><span>02VPN</span></div><span class="spacer"></span><a mat-stroked-button class="guide-link" [href]="guideUrl" target="_blank" rel="noopener noreferrer" (click)="openGuide($event)"><span class="material-symbols-rounded">help</span>How to use</a></header>
       @if (platform.info.kind === 'electron' && platform.info.os === 'windows') {
         <div class="mode-row"><mat-button-toggle-group aria-label="VPN coverage" [value]="vpn.mode()" [disabled]="busy() || status().state === 'connected'" (change)="setMode($event.value)"><mat-button-toggle value="full-tunnel"><span class="material-symbols-rounded">devices</span>Full device</mat-button-toggle><mat-button-toggle value="system-proxy"><span class="material-symbols-rounded">language</span>Web only</mat-button-toggle></mat-button-toggle-group></div>
       }
@@ -35,7 +35,7 @@ import { VpnService } from '../core/vpn.service';
     </div>
   `,
   styles: `
-    .tool-page { max-width: 820px; } .page-header { justify-content: flex-start; } .page-header > div { min-width: 0; } .page-header > div span { color: var(--app-muted); font-size: 13px; } .back { margin-left: -10px; color: var(--app-text); text-decoration: none; }
+    .tool-page { max-width: 820px; } .page-header { justify-content: flex-start; } .page-header > div { min-width: 0; } .page-header > div span { color: var(--app-muted); font-size: 13px; } .back { margin-left: -10px; color: var(--app-text); text-decoration: none; } .guide-link { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; } .guide-link .material-symbols-rounded { font-size: 18px; }
     .mode-row { min-height: 52px; display: flex; justify-content: flex-end; align-items: flex-start; } mat-button-toggle-group { width: 280px; } mat-button-toggle { flex: 1; } mat-button-toggle .material-symbols-rounded { margin-right: 6px; font-size: 18px; vertical-align: -4px; }
     .vpn-panel { min-height: 260px; padding: 32px; display: grid; grid-template-columns: 64px minmax(0,1fr) auto; align-items: center; gap: 24px; } .status-mark { width: 64px; height: 64px; display: grid; place-items: center; border-radius: 8px; background: var(--app-surface-raised); color: var(--app-muted); } .status-mark span { font-size: 34px; } .connected .status-mark { background: color-mix(in srgb, var(--app-success) 18%, var(--app-surface)); color: var(--app-success); }
     .status-copy { min-width: 0; } .status-copy > span { color: var(--app-muted); font-size: 12px; font-weight: 700; text-transform: uppercase; } h2 { margin: 7px 0 6px; font-size: 25px; line-height: 1.2; } time { color: var(--app-muted); font-size: 13px; } button { min-width: 116px; height: 46px; }
@@ -45,8 +45,14 @@ import { VpnService } from '../core/vpn.service';
 })
 export class VpnPage {
   readonly vpn = inject(VpnService); readonly platform = inject(PlatformService); readonly status = this.vpn.status;
+  readonly guideUrl = 'https://wlsaplus.02studio.xyz/blog/use-wechat-on-restricted-networks/';
   readonly busy = computed(() => this.status().state === 'connecting' || this.status().state === 'disconnecting');
   readonly statusLabel = computed(() => ({ connected: 'Connected', connecting: 'Connecting', disconnecting: 'Disconnecting', delegated: 'Opened', error: 'Connection error', unavailable: 'Unavailable', idle: 'Disconnected' })[this.status().state]);
   readonly statusIcon = computed(() => this.status().state === 'connected' ? 'verified_user' : this.status().state === 'error' ? 'error' : 'vpn_lock');
   setMode(mode: VpnConnectionMode): void { this.vpn.setMode(mode); }
+  openGuide(event: MouseEvent): void {
+    if (!window.wlsaplus) return;
+    event.preventDefault();
+    void window.wlsaplus.system.openExternal(this.guideUrl);
+  }
 }

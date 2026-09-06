@@ -16,6 +16,9 @@ declare global {
   interface Window {
     wlsaplus?: {
       platform: { os: 'windows' | 'macos' | 'linux' };
+      system: {
+        openExternal(url: string): Promise<void>;
+      };
       credentials: {
         get(): Promise<PowerSchoolCredentials | null>;
         set(value: PowerSchoolCredentials): Promise<void>;

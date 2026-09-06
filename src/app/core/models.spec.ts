@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeTodoColor, normalizeTodoEndAt, todoDeadlineProgress } from './models';
+import { normalizeTodoColor, normalizeTodoEndAt, normalizeTodoIcon, normalizeTodoTimeType, todoDeadlineProgress } from './models';
 
 describe('task deadlines', () => {
   it('normalizes valid timestamps and rejects invalid values', () => {
@@ -30,5 +30,21 @@ describe('task colors', () => {
     expect(normalizeTodoColor('blue')).toBe('blue');
     expect(normalizeTodoColor('chartreuse')).toBeNull();
     expect(normalizeTodoColor(null)).toBeNull();
+  });
+});
+
+describe('task icons', () => {
+  it('accepts palette values and rejects unsupported icons', () => {
+    expect(normalizeTodoIcon('science')).toBe('science');
+    expect(normalizeTodoIcon('unknown_icon')).toBeNull();
+    expect(normalizeTodoIcon(null)).toBeNull();
+  });
+});
+
+describe('task time types', () => {
+  it('accepts time and deadline values with a configurable fallback', () => {
+    expect(normalizeTodoTimeType('time')).toBe('time');
+    expect(normalizeTodoTimeType('deadline')).toBe('deadline');
+    expect(normalizeTodoTimeType('unknown', 'deadline')).toBe('deadline');
   });
 });

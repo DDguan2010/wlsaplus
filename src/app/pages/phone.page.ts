@@ -16,6 +16,7 @@ import { PhoneService } from '../core/phone.service';
         <a class="back icon-button" routerLink="/tools" aria-label="Back to tools"><span class="material-symbols-rounded">arrow_back</span></a>
         <h1 class="page-title">Phone control</h1>
         <span class="spacer"></span>
+        <a mat-stroked-button class="guide-link" [href]="guideUrl" target="_blank" rel="noopener noreferrer" (click)="openGuide($event)"><span class="material-symbols-rounded">help</span>How to use</a>
       </header>
 
       <section class="connection surface" aria-live="polite">
@@ -73,7 +74,7 @@ import { PhoneService } from '../core/phone.service';
     </div>
   `,
   styles: `
-    .phone-page { max-width: 980px; } .back { margin-left: -10px; color: var(--app-text); text-decoration: none; }
+    .phone-page { max-width: 980px; } .back { margin-left: -10px; color: var(--app-text); text-decoration: none; } .guide-link { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; } .guide-link .material-symbols-rounded { font-size: 18px; }
     .connection { min-height: 116px; padding: 20px; display: grid; grid-template-columns: 58px minmax(0,1fr) auto; align-items: center; gap: 18px; }
     .status-icon { width: 58px; height: 58px; border-radius: 8px; background: var(--app-accent-soft); color: var(--app-accent); font-size: 31px; } .status-icon.active { background: var(--app-accent); color: var(--app-on-accent); }
     .connection-copy { min-width: 0; display: grid; gap: 5px; } .connection-copy strong { font-size: 18px; } .connection-copy > span { color: var(--app-muted); font-size: 13px; line-height: 1.45; } .connection-copy small { color: var(--app-accent); font-size: 12px; overflow-wrap: anywhere; }
@@ -90,6 +91,7 @@ export class PhonePage {
   private readonly snack = inject(MatSnackBar);
   readonly status = this.phone.status;
   readonly turnScreenOff = signal(localStorage.getItem('wlsaplus:phone-screen-off') !== 'false');
+  readonly guideUrl = 'https://wlsaplus.02studio.xyz/blog/set-up-phone-control-on-windows/';
   readonly working = computed(() => ['waiting-usb', 'waiting-authorization', 'configuring', 'connecting', 'stopping'].includes(this.status().state));
   readonly canReopen = computed(() => Boolean(this.status().serial) && ['ready', 'error'].includes(this.status().state));
   readonly controls: { action: PhoneControlAction; label: string; icon: string }[] = [
@@ -137,6 +139,11 @@ export class PhonePage {
   async stop(): Promise<void> { await this.run(() => this.phone.stop()); }
   async disconnect(): Promise<void> { await this.run(() => this.phone.disconnect()); }
   async sendControl(action: PhoneControlAction): Promise<void> { await this.run(() => this.phone.control(action)); }
+  openGuide(event: MouseEvent): void {
+    if (!window.wlsaplus) return;
+    event.preventDefault();
+    void window.wlsaplus.system.openExternal(this.guideUrl);
+  }
 
   private async run(operation: () => Promise<void>): Promise<void> {
     try { await operation(); }

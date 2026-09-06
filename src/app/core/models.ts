@@ -1,5 +1,5 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
-export type AppColor = 'default' | 'blue' | 'green' | 'purple' | 'rose';
+export type AppColor = 'default' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'rose';
 export type DesktopCardType = 'current-class' | 'next-class' | 'today' | 'todo';
 
 export interface PowerSchoolCredentials {
@@ -109,6 +109,20 @@ export const TODO_COLOR_OPTIONS = [
 
 export type TodoColor = typeof TODO_COLOR_OPTIONS[number]['value'];
 
+export const TODO_ICON_OPTIONS = [
+  { value: 'assignment', label: 'Assignment' },
+  { value: 'menu_book', label: 'Study' },
+  { value: 'draw', label: 'Writing' },
+  { value: 'science', label: 'Lab' },
+  { value: 'groups', label: 'Group work' },
+  { value: 'event', label: 'Event' },
+  { value: 'laptop', label: 'Online' },
+  { value: 'flag', label: 'Important' },
+] as const;
+
+export type TodoIcon = typeof TODO_ICON_OPTIONS[number]['value'];
+export type TodoTimeType = 'time' | 'deadline';
+
 export interface TodoItem {
   id: string;
   title: string;
@@ -116,12 +130,23 @@ export interface TodoItem {
   createdAt: string;
   endAt: string | null;
   color: TodoColor | null;
+  icon: TodoIcon | null;
+  timeType: TodoTimeType;
 }
 
 const TODO_COLORS = new Set<TodoColor>(TODO_COLOR_OPTIONS.map((option) => option.value));
+const TODO_ICONS = new Set<TodoIcon>(TODO_ICON_OPTIONS.map((option) => option.value));
 
 export function normalizeTodoColor(value: unknown): TodoColor | null {
   return typeof value === 'string' && TODO_COLORS.has(value as TodoColor) ? value as TodoColor : null;
+}
+
+export function normalizeTodoIcon(value: unknown): TodoIcon | null {
+  return typeof value === 'string' && TODO_ICONS.has(value as TodoIcon) ? value as TodoIcon : null;
+}
+
+export function normalizeTodoTimeType(value: unknown, fallback: TodoTimeType = 'time'): TodoTimeType {
+  return value === 'time' || value === 'deadline' ? value : fallback;
 }
 
 export function normalizeTodoEndAt(value: unknown): string | null {

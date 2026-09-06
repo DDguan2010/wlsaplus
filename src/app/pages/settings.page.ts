@@ -84,9 +84,13 @@ export class SettingsPage {
   readonly launchAtStartup = signal(true);
   readonly colors: { value: AppColor; label: string; swatch: string }[] = [
     { value: 'default', label: 'Default', swatch: '#00677a' },
+    { value: 'red', label: 'Red', swatch: '#a63d4b' },
+    { value: 'orange', label: 'Orange', swatch: '#8b5000' },
+    { value: 'yellow', label: 'Yellow', swatch: '#705d00' },
     { value: 'blue', label: 'Blue', swatch: '#315da8' },
     { value: 'green', label: 'Green', swatch: '#356a35' },
     { value: 'purple', label: 'Purple', swatch: '#6750a4' },
+    { value: 'pink', label: 'Pink', swatch: '#9a3e70' },
     { value: 'rose', label: 'Rose', swatch: '#984061' },
   ];
   readonly cards: { type: DesktopCardType; label: string; icon: string }[] = [

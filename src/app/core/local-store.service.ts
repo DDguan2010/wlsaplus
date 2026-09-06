@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
-import { normalizeTodoColor, normalizeTodoEndAt } from './models';
-import type { AppColor, AppSettings, ProgressCourse, ProgressSnapshot, ScheduleSnapshot, ThemeMode, TodoColor, TodoItem } from './models';
+import { normalizeTodoColor, normalizeTodoEndAt, normalizeTodoIcon, normalizeTodoTimeType } from './models';
+import type { AppColor, AppSettings, ProgressCourse, ProgressSnapshot, ScheduleSnapshot, ThemeMode, TodoColor, TodoIcon, TodoItem, TodoTimeType } from './models';
 
 const EMPTY_SCHEDULE: ScheduleSnapshot = {
   syncedAt: '',
@@ -29,7 +29,7 @@ const EMPTY_PROGRESS: ProgressSnapshot = {
 };
 
 const THEME_MODES = new Set<ThemeMode>(['system', 'light', 'dark']);
-const APP_COLORS = new Set<AppColor>(['default', 'blue', 'green', 'purple', 'rose']);
+const APP_COLORS = new Set<AppColor>(['default', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'rose']);
 
 @Injectable({ providedIn: 'root' })
 export class LocalStore {
@@ -58,7 +58,7 @@ export class LocalStore {
     this.write('schedule', value);
   }
 
-  addTodo(title: string, details = '', endAt: string | null = null, color: TodoColor | null = null): void {
+  addTodo(title: string, details = '', endAt: string | null = null, color: TodoColor | null = null, icon: TodoIcon | null = null, timeType: TodoTimeType = 'time'): void {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
     const value: TodoItem = {
@@ -68,6 +68,8 @@ export class LocalStore {
       createdAt: new Date().toISOString(),
       endAt: normalizeTodoEndAt(endAt),
       color: normalizeTodoColor(color),
+      icon: normalizeTodoIcon(icon),
+      timeType: normalizeTodoTimeType(timeType),
     };
     this.todos.update((items) => [value, ...items]);
     this.write('todos', this.todos());
@@ -102,7 +104,7 @@ export class LocalStore {
     return updated;
   }
 
-  updateTodo(id: string, title: string, details = '', endAt?: string | null, color?: TodoColor | null): boolean {
+  updateTodo(id: string, title: string, details = '', endAt?: string | null, color?: TodoColor | null, icon?: TodoIcon | null, timeType?: TodoTimeType): boolean {
     const trimmedTitle = title.trim();
     if (!trimmedTitle || !this.todos().some((item) => item.id === id)) return false;
     this.todos.update((items) => items.map((item) => item.id === id
@@ -112,6 +114,8 @@ export class LocalStore {
         details: details.trim(),
         endAt: endAt === undefined ? item.endAt : normalizeTodoEndAt(endAt),
         color: color === undefined ? item.color : normalizeTodoColor(color),
+        icon: icon === undefined ? item.icon : normalizeTodoIcon(icon),
+        timeType: timeType === undefined ? item.timeType : normalizeTodoTimeType(timeType),
       }
       : item));
     this.write('todos', this.todos());
@@ -192,13 +196,16 @@ export class LocalStore {
         ? item['title'].trim()
         : typeof item['text'] === 'string' ? item['text'].trim() : '';
       if (!title || typeof item['id'] !== 'string' || typeof item['createdAt'] !== 'string') return [];
+      const endAt = normalizeTodoEndAt(item['endAt']);
       return [{
         id: item['id'],
         title,
         details: typeof item['details'] === 'string' ? item['details'].trim() : '',
         createdAt: item['createdAt'],
-        endAt: normalizeTodoEndAt(item['endAt']),
+        endAt,
         color: normalizeTodoColor(item['color']),
+        icon: normalizeTodoIcon(item['icon']),
+        timeType: normalizeTodoTimeType(item['timeType'], endAt ? 'deadline' : 'time'),
       }];
     });
   }

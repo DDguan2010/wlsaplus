@@ -18,7 +18,7 @@ describe('LocalStore', () => {
       sessions: [{ id: 'session-1', courseId: null, courseName: 'Advisory', teacher: '', room: '', startsAt: '2026-08-24T08:00:00', endsAt: '2026-08-24T08:10:00' }],
       courses: [],
     };
-    const todos: TodoItem[] = [{ id: 'todo-1', title: 'Submit essay', details: 'Upload the final PDF.', createdAt: '2026-08-29T08:00:00.000Z', endAt: null, color: 'blue' }];
+    const todos: TodoItem[] = [{ id: 'todo-1', title: 'Submit essay', details: 'Upload the final PDF.', createdAt: '2026-08-29T08:00:00.000Z', endAt: null, color: 'blue', icon: 'assignment', timeType: 'time' }];
     const settings: AppSettings = { theme: 'dark', color: 'green', tuningEnabled: true, tunedTime: '2026-08-24T08:05:00.000Z' };
 
     window.dispatchEvent(new StorageEvent('storage', { key: 'wlsaplus:schedule', newValue: JSON.stringify(schedule), storageArea: localStorage }));
@@ -49,11 +49,19 @@ describe('LocalStore', () => {
     expect(new LocalStore().settings().color).toBe('purple');
   });
 
+  it('accepts the expanded app color palette', () => {
+    const store = new LocalStore();
+
+    store.updateSettings({ theme: 'light', color: 'orange' });
+
+    expect(new LocalStore().settings().color).toBe('orange');
+  });
+
   it('loads old text-only tasks as titles', () => {
     localStorage.setItem('wlsaplus:todos', JSON.stringify([{ id: 'todo-1', text: 'Legacy task', createdAt: '2026-08-29T08:00:00.000Z' }]));
     const store = new LocalStore();
 
-    expect(store.todos()).toEqual([{ id: 'todo-1', title: 'Legacy task', details: '', createdAt: '2026-08-29T08:00:00.000Z', endAt: null, color: null }]);
+    expect(store.todos()).toEqual([{ id: 'todo-1', title: 'Legacy task', details: '', createdAt: '2026-08-29T08:00:00.000Z', endAt: null, color: null, icon: null, timeType: 'time' }]);
   });
 
   it('stores progress and preserves loaded course details across summary refreshes', () => {
@@ -100,6 +108,30 @@ describe('LocalStore', () => {
     expect(store.todos()[0].endAt).toBeNull();
   });
 
+  it('defaults new task times to time and can change them to deadlines', () => {
+    const store = new LocalStore();
+    store.addTodo('Club meeting', '', '2026-09-08T08:30:00.000Z');
+    const todo = store.todos()[0];
+
+    expect(todo.timeType).toBe('time');
+    expect(store.updateTodo(todo.id, todo.title, '', undefined, undefined, undefined, 'deadline')).toBe(true);
+    expect(store.todos()[0].timeType).toBe('deadline');
+  });
+
+  it('keeps existing saved end times as deadlines', () => {
+    localStorage.setItem('wlsaplus:todos', JSON.stringify([{
+      id: 'todo-1',
+      title: 'Existing deadline',
+      details: '',
+      createdAt: '2026-08-29T08:00:00.000Z',
+      endAt: '2026-09-08T08:30:00.000Z',
+      color: null,
+      icon: null,
+    }]));
+
+    expect(new LocalStore().todos()[0].timeType).toBe('deadline');
+  });
+
   it('adds, edits, preserves, and clears task colors', () => {
     const store = new LocalStore();
     store.addTodo('Draft essay', '', null, 'blue');
@@ -140,5 +172,36 @@ describe('LocalStore', () => {
     }]));
 
     expect(new LocalStore().todos()[0].color).toBeNull();
+  });
+
+  it('adds, edits, preserves, and clears task icons', () => {
+    const store = new LocalStore();
+    store.addTodo('Prepare lab', '', null, null, 'science');
+    const todo = store.todos()[0];
+
+    expect(todo.icon).toBe('science');
+
+    expect(store.updateTodo(todo.id, 'Prepare lab', 'Bring goggles.')).toBe(true);
+    expect(store.todos()[0].icon).toBe('science');
+
+    expect(store.updateTodo(todo.id, 'Prepare lab', 'Bring goggles.', undefined, undefined, 'assignment')).toBe(true);
+    expect(store.todos()[0].icon).toBe('assignment');
+
+    expect(store.updateTodo(todo.id, 'Prepare lab', 'Bring goggles.', undefined, undefined, null)).toBe(true);
+    expect(store.todos()[0].icon).toBeNull();
+  });
+
+  it('normalizes invalid stored task icons to no icon', () => {
+    localStorage.setItem('wlsaplus:todos', JSON.stringify([{
+      id: 'todo-1',
+      title: 'Legacy task',
+      details: '',
+      createdAt: '2026-08-29T08:00:00.000Z',
+      endAt: null,
+      color: null,
+      icon: 'not_allowed',
+    }]));
+
+    expect(new LocalStore().todos()[0].icon).toBeNull();
   });
 });

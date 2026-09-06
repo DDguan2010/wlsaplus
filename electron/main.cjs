@@ -1,4 +1,4 @@
-const { app, BrowserWindow, desktopCapturer, ipcMain, safeStorage, screen, session } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, safeStorage, screen, session, shell } = require('electron');
 const { execFile, spawn } = require('node:child_process');
 const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
@@ -11,6 +11,7 @@ const { VPN_CONNECTION_MODES, buildVpnConfig } = require('./vpn-config.cjs');
 const { updateFeed } = require('./update-config.cjs');
 const { closeAllCards } = require('./card-manager.cjs');
 const { PhoneManager } = require('./phone-manager.cjs');
+const { validateExternalHelpUrl } = require('./external-links.cjs');
 
 function handleSquirrelEvent() {
   if (process.platform !== 'win32') return false;
@@ -103,6 +104,13 @@ function appUrl(route = '') {
 
 function webPreferences(overrides = {}) {
   return { preload, contextIsolation: true, nodeIntegration: false, sandbox: true, partition: 'persist:wlsaplus', ...overrides };
+}
+
+function configureExternalHelpLinks(win) {
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    try { void shell.openExternal(validateExternalHelpUrl(url)); } catch { /* Ignore unapproved popup URLs. */ }
+    return { action: 'deny' };
+  });
 }
 
 function delay(milliseconds) { return new Promise((resolve) => setTimeout(resolve, milliseconds)); }
@@ -693,6 +701,7 @@ async function translateText(text, source, target) {
 
 function createMainWindow(route = '') {
   mainWindow = new BrowserWindow({ width: 1220, height: 820, minWidth: 380, minHeight: 600, backgroundColor: '#f7f8fa', title: 'WLSAPlus', icon: iconPath(), webPreferences: webPreferences() });
+  configureExternalHelpLinks(mainWindow);
   mainWindow.loadURL(appUrl(route));
 }
 
@@ -733,6 +742,8 @@ function validateBaseUrl(value) {
   if (url.protocol !== 'https:' && !(process.env.WLSAPLUS_DEV_ALLOW_HTTP === '1' && url.protocol === 'http:')) throw new Error('Only HTTPS PowerSchool servers are allowed.');
   return url.origin;
 }
+
+ipcMain.handle('system:open-external', (_event, url) => shell.openExternal(validateExternalHelpUrl(url)));
 
 ipcMain.handle('credentials:get', async () => {
   try {

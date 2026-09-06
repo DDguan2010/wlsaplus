@@ -2,6 +2,9 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('wlsaplus', {
   platform: { os: process.platform === 'win32' ? 'windows' : process.platform === 'darwin' ? 'macos' : 'linux' },
+  system: {
+    openExternal: (url) => ipcRenderer.invoke('system:open-external', url),
+  },
   credentials: {
     get: () => ipcRenderer.invoke('credentials:get'),
     set: (value) => ipcRenderer.invoke('credentials:set', value),
