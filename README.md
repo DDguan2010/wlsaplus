@@ -30,13 +30,20 @@ Open **Actions > Build and release > Run workflow**, enter a semantic version su
 
 Normal branch pushes do not run the release workflow.
 
-Optional signing secrets:
+Required Android release signing secrets:
 
 - Android: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, `ANDROID_KEY_PASSWORD`
+
+Android releases use the regular `cn.org.wlsash.wlsaplus` package and a permanent signing key. The action verifies the signature, 16 KiB ZIP alignment, and that the APK is not debuggable before publishing. It fails if signing secrets are missing. Local Phone Preview builds remain separate debug builds.
+
+Keep an offline backup of the signing keystore and password. Losing the key prevents future updates to installed copies. Version 1.0.7 introduces permanent release signing; older temporary debug-signed APKs cannot be updated in place with the new key. Removing an old app also removes its local data.
+
+Optional macOS signing secrets:
+
 - macOS signing: `APPLE_CERTIFICATE_BASE64`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_IDENTITY`
 - macOS notarization: `APPLE_ID`, `APPLE_APP_PASSWORD`, `APPLE_TEAM_ID`
 
-Without signing secrets, Android produces an installable debug APK and macOS produces an unsigned package.
+Without macOS signing secrets, macOS produces an unsigned package.
 
 ## PowerSchool network recorder
 

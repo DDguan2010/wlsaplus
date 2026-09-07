@@ -11,7 +11,7 @@ const { VPN_CONNECTION_MODES, buildVpnConfig } = require('./vpn-config.cjs');
 const { updateFeed } = require('./update-config.cjs');
 const { closeAllCards } = require('./card-manager.cjs');
 const { PhoneManager } = require('./phone-manager.cjs');
-const { PhoneNetwork, validLoginUrl } = require('./phone-network.cjs');
+const { PhoneNetwork } = require('./phone-network.cjs');
 const { validateExternalHelpUrl } = require('./external-links.cjs');
 
 function handleSquirrelEvent() {
@@ -834,13 +834,6 @@ ipcMain.handle('phone:network-status', async () => {
   if (process.platform !== 'win32') return { state: 'stopped', active: 0 };
   await phoneNetwork.load(); return phoneNetwork.getStatus();
 });
-ipcMain.handle('phone:sign-in', async () => {
-  phoneManager.assertSupported();
-  const url = phoneNetwork.getStatus().authUrl;
-  if (!validLoginUrl(url)) throw new Error('The sign-in link is not ready. Try connecting again.');
-  await shell.openExternal(url);
-});
-ipcMain.handle('phone:switch-account', () => phoneManager.switchAccount());
 ipcMain.handle('phone:connect', (_event, options) => phoneManager.connect({ turnScreenOff: options?.turnScreenOff !== false }));
 ipcMain.handle('phone:start', (_event, options) => phoneManager.start({ turnScreenOff: options?.turnScreenOff !== false }));
 ipcMain.handle('phone:stop', () => phoneManager.stop());

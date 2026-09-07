@@ -5,7 +5,6 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -15,13 +14,12 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import org.json.JSONObject;
-import phonebridge.Phonebridge;
 
 public final class PhoneReceiverActivity extends Activity {
     private final Handler handler = new Handler();
     private TextView status, approval;
-    private Button enable, login, switchAccount, pair, approve, reject, forget, stop;
-    private String code = "", authUrl = "";
+    private Button enable, pair, approve, reject, forget, stop;
+    private String code = "";
     private LinearLayout layout;
     private final Runnable refresh = new Runnable() { public void run() { render(); handler.postDelayed(this, 1000); } };
 
@@ -36,7 +34,7 @@ public final class PhoneReceiverActivity extends Activity {
             return insets;
         });
         text("Connect to computer", 24);
-        text("Keep USB connected during setup. Sign in with the same personal Tailscale account as your Windows computer. Only approve a code that matches WLSAPlus on that computer.", 16);
+        text("Keep USB connected during setup. Only approve a code that matches WLSAPlus on your computer. Both devices need internet access when using the secure relay.", 16);
         status = text("Stopped", 16);
         enable = button("Enable connection", () -> {
             if (PhoneReceiverService.current != null) return;
@@ -47,15 +45,6 @@ public final class PhoneReceiverActivity extends Activity {
             if (Build.VERSION.SDK_INT >= 26) startForegroundService(intent); else startService(intent);
             enable.setEnabled(false);
         });
-        login = button("Sign in to Tailscale", () -> {
-            if (Phonebridge.validLoginURL(authUrl)) {
-                try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(authUrl))); }
-                catch (Exception error) { PhoneReceiverService.lastError = "Install a browser to sign in."; }
-            }
-        });
-        switchAccount = button("Switch account", () -> new AlertDialog.Builder(this).setTitle("Switch Tailscale account?")
-            .setMessage("This disconnects your computer, signs out of Tailscale, and removes this phone's saved computer pairing. School data and tasks are unchanged. After signing in, forget the old phone pairing on Windows and pair again by USB.")
-            .setNegativeButton("Cancel", null).setPositiveButton("Switch account", (dialog, which) -> command("switch-account", "")).show());
         pair = button("Pair computer", () -> command("pair", ""));
         approval = text("", 22);
         approve = button("Approve matching code", () -> {
@@ -69,7 +58,7 @@ public final class PhoneReceiverActivity extends Activity {
             .setMessage("This stops its access immediately. USB approval will be required to connect again.")
             .setNegativeButton("Cancel", null).setPositiveButton("Forget", (dialog, which) -> command("forget", "")).show());
         stop = button("Stop connection", () -> stopService(new Intent(this, PhoneReceiverService.class)));
-        text("After the Windows phone window opens, you can unplug USB. After restarting the phone, connect USB again to enable debugging. Stop the connection when finished. Battery restrictions or blocked Tailscale services can interrupt it.", 14);
+        text("After the Windows phone window opens, you can unplug USB. After restarting the phone, connect USB again to enable debugging. Stop the connection when finished. Battery restrictions or network interruptions can disconnect it.", 14);
         button("Back", this::finish);
     }
 
@@ -86,22 +75,19 @@ public final class PhoneReceiverActivity extends Activity {
     private void render() {
         JSONObject value = PhoneReceiverService.snapshot(); String state = value.optString("state", "stopped");
         boolean running = PhoneReceiverService.current != null;
-        authUrl = value.optString("authUrl"); code = value.optString("code");
+        code = value.optString("code");
         String peer = value.optString("peer");
         String message = state.equals("ready") ? (peer.isEmpty() ? "Ready to pair" : "Paired with " + peer) : state;
-        if (state.equals("switching-account")) message = "Switching Tailscale account...";
-        if (!value.optString("tailnet").isEmpty()) message += "\nTailscale network: " + value.optString("tailnet");
+        if (state.equals("connecting")) message = "Waiting for your computer...";
+        if (value.optBoolean("connected")) message += "\nConnected through Cloudflare";
         if (value.optBoolean("pairing") && code.isEmpty()) message = "Waiting for your computer. Keep USB connected.";
         if (value.optInt("active") > 0) message += "\nComputer connected";
         if (!PhoneReceiverService.lastError.isEmpty()) message += "\n" + PhoneReceiverService.lastError;
         if (!value.optString("error").isEmpty()) message += "\n" + value.optString("error");
+        if (!value.optString("connectionError").isEmpty()) message += "\n" + value.optString("connectionError");
         status.setText(message); enable.setEnabled(!running);
         enable.setVisibility(running ? View.GONE : View.VISIBLE); stop.setVisibility(running ? View.VISIBLE : View.GONE);
-        login.setVisibility(Phonebridge.validLoginURL(authUrl) ? View.VISIBLE : View.GONE);
-        switchAccount.setVisibility(running ? View.VISIBLE : View.GONE);
-        switchAccount.setEnabled(!state.equals("switching-account"));
-        stop.setEnabled(!state.equals("switching-account"));
-        pair.setVisibility(state.equals("ready") && peer.isEmpty() && code.isEmpty() ? View.VISIBLE : View.GONE);
+        pair.setVisibility(state.equals("ready") && peer.isEmpty() && code.isEmpty() && !value.optBoolean("pairing") ? View.VISIBLE : View.GONE);
         approval.setText(code.isEmpty() ? "" : value.optString("pending") + "\n" + code);
         approve.setVisibility(code.isEmpty() ? View.GONE : View.VISIBLE); reject.setVisibility(code.isEmpty() ? View.GONE : View.VISIBLE);
         forget.setVisibility(peer.isEmpty() ? View.GONE : View.VISIBLE);

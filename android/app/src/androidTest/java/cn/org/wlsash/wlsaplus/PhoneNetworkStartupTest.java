@@ -19,7 +19,7 @@ import phonebridge.Phonebridge;
 
 @RunWith(AndroidJUnit4.class)
 public class PhoneNetworkStartupTest {
-    @Test public void reachesHostedSignInWithAndroidAppPermissions() throws Exception {
+    @Test public void opensUsbPairingWithoutSignIn() throws Exception {
         Context context = InstrumentationRegistry.getInstrumentation().getTargetContext();
         File state = new File(context.getCacheDir(), "phone-network-startup-test-" + UUID.randomUUID());
         assertTrue(state.mkdir());
@@ -28,20 +28,13 @@ public class PhoneNetworkStartupTest {
         for (byte value : key) hex.append(String.format(Locale.ROOT, "%02x", value & 255));
         Bridge bridge = Phonebridge.newBridge();
         try {
-            bridge.updateNetwork(PhoneNetworkSnapshot.capture(context));
             bridge.start(new JSONObject().put("role", "phone").put("dir", state.getAbsolutePath())
                 .put("storageKey", hex.toString()).put("hostname", "wlsaplus-startup-check").toString());
-            long deadline = SystemClock.elapsedRealtime() + 45000;
-            boolean signInReady = false;
-            while (SystemClock.elapsedRealtime() < deadline) {
-                JSONObject status = new JSONObject(bridge.status());
-                assertFalse("Phone bridge entered error state", "error".equals(status.optString("state")));
-                if (Phonebridge.validLoginURL(status.optString("authUrl"))) { signInReady = true; break; }
-                SystemClock.sleep(250);
-            }
-            assertTrue("Hosted sign-in was not reached within 45 seconds", signInReady);
-            // Exercise updates and stop without approving a computer or signing in.
-            bridge.updateNetwork(PhoneNetworkSnapshot.capture(context));
+            JSONObject status = new JSONObject(bridge.status());
+            assertTrue("ready".equals(status.optString("state")));
+            assertTrue(status.optInt("protocol") == 2);
+            assertTrue(status.optBoolean("pairing"));
+            assertFalse(status.has("authUrl"));
             bridge.stop();
             assertTrue("stopped".equals(new JSONObject(bridge.status()).optString("state")));
         } finally {

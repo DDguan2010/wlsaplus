@@ -20,10 +20,8 @@ public final class PhoneReceiverService extends Service {
     static volatile String lastError = "";
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
     private Bridge bridge;
-    private String networkSnapshot = "";
     private volatile String status = "{\"state\":\"connecting\"}";
     private volatile boolean stopping;
-    private volatile boolean switchingAccount;
     private PowerManager.WakeLock wakeLock;
     private final android.os.Handler handler = new android.os.Handler(android.os.Looper.getMainLooper());
 
@@ -41,8 +39,8 @@ public final class PhoneReceiverService extends Service {
         wakeLock.acquire();
         worker.execute(() -> {
             try {
+                if (stopping) return;
                 bridge = Phonebridge.newBridge();
-                updateNetwork();
                 bridge.start(PhoneIdentity.configuration(this));
                 poll();
             } catch (Exception error) { fail(error); }
@@ -51,29 +49,18 @@ public final class PhoneReceiverService extends Service {
 
     private void poll() {
         if (stopping) return;
-        try { updateNetwork(); }
-        catch (Exception error) { lastError = "Could not refresh network information. " + error.getMessage(); }
         status = bridge.status();
         handler.postDelayed(() -> { if (!stopping) worker.execute(this::poll); }, 1000);
     }
 
-    private void updateNetwork() throws Exception {
-        String next = PhoneNetworkSnapshot.capture(this);
-        if (!next.equals(networkSnapshot)) {
-            bridge.updateNetwork(next);
-            networkSnapshot = next;
-        }
-    }
-
     static JSONObject snapshot() {
         PhoneReceiverService service = current;
-        try { return new JSONObject(service == null ? "{\"state\":\"stopped\"}" : service.switchingAccount ? "{\"state\":\"switching-account\"}" : service.status); }
+        try { return new JSONObject(service == null ? "{\"state\":\"stopped\"}" : service.status); }
         catch (Exception error) { return new JSONObject(); }
     }
 
     void command(String action, String code) {
-        if (stopping || switchingAccount) return;
-        if ("switch-account".equals(action)) switchingAccount = true;
+        if (stopping) return;
         worker.execute(() -> {
             try {
                 if (bridge == null) throw new Exception("Wait for the connection to start.");
@@ -82,14 +69,12 @@ public final class PhoneReceiverService extends Service {
                     case "approve": bridge.approvePair(code); break;
                     case "reject": bridge.rejectPair(); break;
                     case "forget": bridge.forget(); break;
-                    case "switch-account": bridge.switchAccount(); break;
                     default: throw new Exception("Unknown phone connection command.");
                 }
                 lastError = ""; status = bridge.status();
             } catch (Exception error) { lastError = error.getMessage(); }
             finally {
                 if (bridge != null) status = bridge.status();
-                if ("switch-account".equals(action)) switchingAccount = false;
             }
         });
     }

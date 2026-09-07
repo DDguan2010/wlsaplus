@@ -1,0 +1,21 @@
+name = "wlsaplus-phone-relay"
+main = "src/worker.js"
+compatibility_date = "2026-09-07"
+workers_dev = false
+routes = [{ pattern = "phonewlsaplus.02studio.xyz", custom_domain = true }]
+
+[[durable_objects.bindings]]
+name = "PHONE_ROOMS"
+class_name = "PhoneRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["PhoneRoom"]
+
+[[ratelimits]]
+name = "CONNECT_LIMIT"
+namespace_id = "27183"
+simple = { limit = 240, period = 60 }
+
+[observability]
+enabled = false

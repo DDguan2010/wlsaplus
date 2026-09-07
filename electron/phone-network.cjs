@@ -5,15 +5,8 @@ const os = require('node:os');
 const path = require('node:path');
 const readline = require('node:readline');
 
-function validOverlayIp(value) {
-  if (typeof value !== 'string' || !/^100\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(value)) return false;
-  const parts = value.split('.').map(Number);
-  return parts.join('.') === value && parts[1] >= 64 && parts[1] <= 127 && parts.every(part => part <= 255);
-}
-
-function validLoginUrl(value) {
-  try { const url = new URL(value); return url.protocol === 'https:' && url.hostname === 'login.tailscale.com' && !url.port && !url.username && !url.password; }
-  catch { return false; }
+function validPair(value) {
+  return value?.protocol === 2 && /^[a-f0-9]{64}$/.test(value.secret ?? '') && typeof value.name === 'string' && value.name.length > 0 && value.name.length <= 80;
 }
 
 class PhoneNetwork {
@@ -38,6 +31,12 @@ class PhoneNetwork {
     if (!this.saved) { this.saved = { storageKey: crypto.randomBytes(32).toString('hex'), hostname: `wlsaplus-pc-${crypto.randomBytes(4).toString('hex')}` }; await this.save(); }
     if (!/^[a-f0-9]{64}$/.test(this.saved.storageKey ?? '') || !/^wlsaplus-pc-[a-f0-9]{8}$/.test(this.saved.hostname ?? '')) {
       this.saved = null; throw new Error('The saved phone connection identity is damaged.');
+    }
+    if ((this.saved.pair && !validPair(this.saved.pair)) || (this.saved.pendingPair && !validPair(this.saved.pendingPair))) {
+      const previous = this.saved;
+      this.saved = { ...previous }; delete this.saved.pair; delete this.saved.pendingPair;
+      try { await this.save(); } catch (error) { this.saved = null; throw error; }
+      this.update({ state: 'stopped', active: 0, repairRequired: true });
     }
   }
   async save() {
@@ -93,7 +92,7 @@ class PhoneNetwork {
 
   async pair(runAdb, usbSerial, onMessage, sleep) {
     await this.start();
-    if (this.status.state !== 'ready' || !validOverlayIp(this.status.ip)) throw new Error('Sign in to the secure connection on this computer first.');
+    if (this.status.protocol !== 2) throw new Error('Update the Windows phone connection component first.');
     if (this.saved.pair) throw new Error('A phone is already paired. Forget the connection before pairing another phone.');
     const abort = new AbortController(); this.pairAbort = abort;
     const launch = await runAdb(['-s', usbSerial, 'shell', 'am', 'start', '-n', `${this.androidPackage}/cn.org.wlsash.wlsaplus.MainActivity`, '--ez', 'wlsaPhoneReceiver', 'true']);
@@ -102,12 +101,12 @@ class PhoneNetwork {
     const port = Number(String(stdout).trim());
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Could not establish USB pairing. Reconnect the USB cable.');
     const previous = this.saved.pendingPair;
-    const request = previous?.usbSerial === usbSerial && previous.peerIp === this.status.ip
-      ? { peerIp: previous.peerIp, name: previous.name, secret: previous.secret }
-      : { peerIp: this.status.ip, name: os.hostname().slice(0, 80), secret: crypto.randomBytes(32).toString('hex') };
+    const request = previous?.usbSerial === usbSerial && validPair(previous)
+      ? { protocol: 2, name: previous.name, secret: previous.secret }
+      : { protocol: 2, name: os.hostname().slice(0, 80), secret: crypto.randomBytes(32).toString('hex') };
     const digest = crypto.createHash('sha256').update(request.secret).digest();
     const code = String(digest.readUIntBE(0, 3) % 1_000_000).padStart(6, '0');
-    onMessage(`On the phone, enable connection, sign in to the same Tailscale account, and tap Pair computer. Confirm code ${code}.`);
+    onMessage(`On the phone, tap Enable connection and approve matching code ${code}. Keep USB connected until the phone window opens.`);
     try {
       // Persist the proposed secret before approval so an interrupted USB exchange
       // can resume without requiring the user to forget both devices.
@@ -117,16 +116,16 @@ class PhoneNetwork {
         if (abort.signal.aborted) throw new Error('Pairing cancelled.');
         const phoneStatus = await fetch(`http://127.0.0.1:${port}/status`, { headers: { 'X-WLSA-USB': '1' }, signal: AbortSignal.any([abort.signal, AbortSignal.timeout(2_000)]) })
           .then(response => response.ok ? response.json() : null).catch(() => null);
-        if (phoneStatus?.tailnet && this.status.tailnet && phoneStatus.tailnet !== this.status.tailnet) {
-          throw new Error(`The phone is signed in to Tailscale network "${phoneStatus.tailnet}", but this computer uses "${this.status.tailnet}". Sign in to the same network on both devices before pairing.`);
-        }
+        if (!phoneStatus) { await sleep(1_000); continue; }
+        if (phoneStatus.protocol !== 2) throw new Error('Install the updated WLSAPlus Android app for Cloudflare phone connections.');
+        if (phoneStatus?.relay && this.status.relay && phoneStatus.relay !== this.status.relay) throw new Error('The apps use different phone relays. Update both apps and try again.');
         const result = await fetch(`http://127.0.0.1:${port}/pair`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-WLSA-USB': '1' }, body: JSON.stringify(request), signal: AbortSignal.any([abort.signal, AbortSignal.timeout(2_000)]) }).catch(() => null);
         if (result?.status === 409) throw new Error('This phone already trusts another computer. Forget it on the phone before pairing again.');
         if (result?.ok) {
           const pair = await result.json();
-          if (pair.accepted && validOverlayIp(pair.ip)) {
+          if (pair.accepted && pair.protocol === 2) {
             if (abort.signal.aborted) throw new Error('Pairing cancelled.');
-            this.saved.pair = { peerIp: pair.ip, secret: request.secret, name: 'Android phone', usbSerial };
+            this.saved.pair = { protocol: 2, secret: request.secret, name: 'Android phone', usbSerial };
             delete this.saved.pendingPair;
             await this.save(); return;
           }
@@ -140,24 +139,18 @@ class PhoneNetwork {
   async endpoint() {
     await this.start();
     if (!this.saved.pair) throw new Error('Pair the phone by USB first.');
-    if (this.status.state !== 'ready') throw new Error('Wait for the secure connection, or sign in again.');
+    if (!validPair(this.saved.pair)) throw new Error('Update both apps and pair again by USB.');
     const result = await this.command('connect', this.saved.pair);
     if (!/^127\.0\.0\.1:\d+$/.test(result.endpoint ?? '')) throw new Error('Could not open the paired connection.');
     return result.endpoint;
   }
 
-  async forget() { await this.dispose(); await this.load(); delete this.saved.pair; delete this.saved.pendingPair; await this.save(); this.update({ state: 'stopped', active: 0 }); }
-  async switchAccount() {
-    this.pairAbort?.abort();
-    await this.load();
+  async forget() {
+    await this.dispose(); await this.load();
     const previous = this.saved;
-    this.saved = { ...previous };
-    delete this.saved.pair; delete this.saved.pendingPair;
-    try { await this.save(); }
-    catch (error) { this.saved = previous; throw error; }
-    await this.start();
-    await this.command('switch-account');
-    return this.getStatus();
+    this.saved = { ...previous }; delete this.saved.pair; delete this.saved.pendingPair;
+    try { await this.save(); } catch (error) { this.saved = previous; throw error; }
+    this.update({ state: 'stopped', active: 0 });
   }
   dispose() {
     this.pairAbort?.abort();
@@ -176,4 +169,4 @@ class PhoneNetwork {
   }
 }
 
-module.exports = { PhoneNetwork, validOverlayIp, validLoginUrl };
+module.exports = { PhoneNetwork, validPair };

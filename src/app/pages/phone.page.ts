@@ -4,8 +4,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatDialog } from '@angular/material/dialog';
-import { ConfirmDialogComponent } from '../shared/text-dialog.component';
 import type { PhoneControlAction } from '../core/models';
 import { PhoneService } from '../core/phone.service';
 
@@ -31,9 +29,7 @@ import { PhoneService } from '../core/phone.service';
           }
         </div>
         <div class="connection-actions">
-          @if (switchingAccount()) {
-            <button mat-stroked-button disabled><span class="material-symbols-rounded" aria-hidden="true">sync</span>Switching account</button>
-          } @else if (working() && status().state !== 'stopping') {
+          @if (working() && status().state !== 'stopping') {
             <button mat-stroked-button (click)="stop()"><span class="material-symbols-rounded" aria-hidden="true">close</span>Cancel</button>
           } @else if (status().state === 'mirroring') {
             <button mat-flat-button (click)="stop()" [disabled]="working()"><span class="material-symbols-rounded">stop_circle</span>Close phone</button>
@@ -50,8 +46,6 @@ import { PhoneService } from '../core/phone.service';
         <section class="network-status" aria-live="polite">
           <span class="material-symbols-rounded">encrypted</span>
           <div><strong>Secure connection</strong><span>{{ networkLabel() }}</span></div>
-          @if (network().authUrl && !switchingAccount()) { <button mat-stroked-button (click)="signIn()"><span class="material-symbols-rounded" aria-hidden="true">login</span>Sign in</button> }
-          <button mat-stroked-button (click)="switchAccount()" [disabled]="working()"><span class="material-symbols-rounded" aria-hidden="true">switch_account</span>Switch account</button>
         </section>
       }
 
@@ -73,7 +67,7 @@ import { PhoneService } from '../core/phone.service';
         <div class="setup-list surface">
           <div class="setup-step"><span class="step-number">1</span><div><strong>Enable USB debugging</strong><span>On the Android phone, enable Developer options and USB debugging.</span></div></div>
           <div class="setup-step"><span class="step-number">2</span><div><strong>Connect and authorize</strong><span>Connect the phone by USB, unlock it, then allow this computer on the debugging prompt.</span></div></div>
-          <div class="setup-step"><span class="step-number">3</span><div><strong>Connect wirelessly</strong><span>Keep USB connected until the phone window opens. If Wi-Fi blocks the connection, sign in to the same personal Tailscale account on both devices and approve the matching code in the Android WLSAPlus app.</span></div></div>
+          <div class="setup-step"><span class="step-number">3</span><div><strong>Approve your computer</strong><span>If prompted, enable the connection in the Android app and approve the matching code. Unplug USB after the phone window opens.</span></div></div>
         </div>
       </section>
 
@@ -110,24 +104,20 @@ import { PhoneService } from '../core/phone.service';
 export class PhonePage {
   private readonly phone = inject(PhoneService);
   private readonly snack = inject(MatSnackBar);
-  private readonly dialog = inject(MatDialog);
-  readonly switchingAccount = signal(false);
-  private accountDialogOpen = false;
   readonly status = this.phone.status;
   readonly network = this.phone.network;
   readonly networkLabel = computed(() => {
     const status = this.network();
-    if (this.switchingAccount() || status.state === 'switching-account') return 'Switching Tailscale account...';
-    if (status.state === 'stopped') return 'Not connected';
-    if (status.authUrl) return 'Sign in with the same personal Tailscale account used on your phone.';
-    if (status.state === 'needs-approval') return 'Approve this device in your Tailscale account.';
+    if (status.repairRequired) return 'Connect by USB once to update your phone pairing.';
+    if (status.state === 'stopped') return status.pairedPhone ? 'Phone paired' : 'Not connected';
     if (status.connectionError) return status.connectionError;
-    if (status.state === 'ready') return `${status.pairedPhone ? 'Phone paired' : 'Ready for phone approval'}${status.tailnet ? ` | ${status.tailnet}` : ''}`;
-    return status.error || 'Connecting to Tailscale...';
+    if (status.connected) return 'Connected through Cloudflare';
+    if (status.state === 'ready') return status.pairedPhone ? 'Phone paired' : 'Ready for phone approval';
+    return status.error || 'Waiting for the paired phone...';
   });
   readonly turnScreenOff = signal(localStorage.getItem('wlsaplus:phone-screen-off') !== 'false');
   readonly guideUrl = 'https://wlsaplus.02studio.xyz/blog/set-up-phone-control-on-windows/';
-  readonly working = computed(() => this.switchingAccount() || ['waiting-usb', 'waiting-authorization', 'configuring', 'connecting', 'stopping'].includes(this.status().state));
+  readonly working = computed(() => ['waiting-usb', 'waiting-authorization', 'configuring', 'connecting', 'stopping'].includes(this.status().state));
   readonly canReopen = computed(() => Boolean(this.status().serial || this.network().pairedPhone) && ['idle', 'ready', 'error'].includes(this.status().state));
   readonly controls: { action: PhoneControlAction; label: string; icon: string }[] = [
     { action: 'back', label: 'Back', icon: 'arrow_back' },
@@ -157,7 +147,7 @@ export class PhonePage {
     'waiting-usb': 'Waiting for USB',
     'waiting-authorization': 'Authorization needed',
     configuring: 'Setting up wireless mode',
-    connecting: 'Connecting over Wi-Fi',
+    connecting: 'Connecting to phone',
     mirroring: 'Phone is connected',
     ready: 'Ready to reopen',
     stopping: 'Closing phone window',
@@ -170,22 +160,6 @@ export class PhonePage {
   }
 
   async connect(): Promise<void> { await this.run(() => this.phone.connect(this.turnScreenOff())); }
-  async signIn(): Promise<void> { await this.run(() => this.phone.signIn()); }
-  switchAccount(): void {
-    if (this.accountDialogOpen || this.working()) return;
-    this.accountDialogOpen = true;
-    this.dialog.open(ConfirmDialogComponent, { data: {
-      title: 'Switch Tailscale account?',
-      message: 'This closes phone control, signs out of Tailscale, and removes this computer\'s saved phone pairing. School data and tasks are unchanged. After signing in, forget the old pairing on the phone and pair again by USB.',
-      action: 'Switch account',
-    } }).afterClosed().subscribe(async confirmed => {
-      this.accountDialogOpen = false;
-      if (!confirmed) return;
-      this.switchingAccount.set(true);
-      try { await this.run(() => this.phone.switchAccount()); }
-      finally { this.switchingAccount.set(false); }
-    });
-  }
   async start(): Promise<void> { await this.run(() => this.phone.start(this.turnScreenOff())); }
   async stop(): Promise<void> { await this.run(() => this.phone.stop()); }
   async disconnect(): Promise<void> { await this.run(() => this.phone.disconnect()); }

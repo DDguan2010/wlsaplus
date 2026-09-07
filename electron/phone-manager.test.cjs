@@ -127,7 +127,7 @@ function automaticManager({ direct = true, ip = '192.168.1.24', authorized = tru
   return { manager, calls, network };
 }
 
-test('direct Wi-Fi success never starts Tailscale', async () => {
+test('direct Wi-Fi success never starts the relay', async () => {
   const { manager, calls } = automaticManager(); await manager.connect();
   assert.equal(manager.lastDevice.paired, false);
   assert.equal(calls.includes('network-start'), false);
@@ -147,7 +147,7 @@ test('missing LAN address falls back without attempting an invalid ADB endpoint'
   assert.equal(calls.some(command => command.includes('null:5555')), false);
 });
 
-test('ADB authorization errors do not trigger Tailscale fallback', async () => {
+test('ADB authorization errors do not trigger relay fallback', async () => {
   const { manager, calls } = automaticManager({ authorized: false });
   await assert.rejects(manager.connect(), /allow USB debugging/);
   assert.equal(calls.includes('network-start'), false);
@@ -260,38 +260,22 @@ test('secure ADB failures report the actual tunnel failure', async () => {
   await assert.rejects(manager.connectWireless('127.0.0.1:43001'), /Android debugging is off/);
 });
 
-test('account switching closes the mirror and clears the device before signing out', async () => {
+test('forget closes the mirror and clears the saved device and relay', async () => {
   const { manager, network, calls } = automaticManager();
   manager.lastDevice = { serial: '127.0.0.1:43001', paired: true };
   manager.stopProcess = async () => { calls.push('close-mirror'); };
   network.forget = async () => { calls.push('forget-pair'); };
-  let finish;
-  network.switchAccount = () => {
-    assert.equal(manager.lastDevice, null);
-    return new Promise(resolve => { finish = resolve; });
-  };
-  const switching = manager.switchAccount();
-  assert.equal(manager.switchAccount(), switching);
-  assert.equal(manager.connect(), switching);
-  assert.equal(manager.start(), switching);
-  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  const status = await manager.disconnect();
   assert.ok(calls.includes('close-mirror'));
   assert.ok(calls.includes('forget-pair'));
   assert.ok(calls.includes('disconnect 127.0.0.1:43001'));
-  finish();
-  const status = await switching;
   assert.equal(status.state, 'idle');
   assert.equal(status.serial, null);
-  assert.equal(manager.accountSwitch, null);
+  assert.equal(manager.lastDevice, null);
 });
 
-test('failed account switching reports the error and permits retry', async () => {
-  const { manager, network } = automaticManager();
-  network.forget = async () => {};
-  network.switchAccount = async () => { throw new Error('sign-out failed'); };
-  await assert.rejects(manager.switchAccount(), /sign-out failed/);
-  assert.equal(manager.status.state, 'error');
-  assert.equal(manager.accountSwitch, null);
-  network.switchAccount = async () => {};
-  assert.equal((await manager.switchAccount()).state, 'idle');
+test('relay video uses a lower bitrate and frame size without changing direct Wi-Fi', () => {
+  const relay = buildScrcpyArguments('127.0.0.1:40001', { relay: true });
+  for (const flag of ['--max-size=1280', '--max-fps=30', '--video-bit-rate=2M', '--video-buffer=0']) assert.ok(relay.includes(flag));
+  assert.equal(buildScrcpyArguments('192.168.1.2:5555').some(flag => flag.startsWith('--video-bit-rate')), false);
 });

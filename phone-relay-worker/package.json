@@ -1,0 +1,14 @@
+{
+  "name": "wlsaplus-phone-relay",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/worker.js",
+    "test": "node --test test/*.test.mjs",
+    "test:native": "node scripts/test-native.mjs",
+    "dev": "wrangler dev --port 8791",
+    "deploy": "wrangler deploy"
+  },
+  "devDependencies": { "wrangler": "4.128.0", "miniflare": "5.20260831.0-alpha" }
+}

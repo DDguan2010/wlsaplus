@@ -60,6 +60,7 @@ function buildScrcpyArguments(serial, options = {}) {
     '--disable-screensaver',
   ];
   if (options.turnScreenOff !== false) args.push('--turn-screen-off');
+  if (options.relay) args.push('--max-size=1280', '--max-fps=30', '--video-bit-rate=2M', '--video-buffer=0');
   return args;
 }
 
@@ -97,7 +98,6 @@ class PhoneManager {
     this.network = network;
     this.scrcpyProcess = null;
     this.operation = null;
-    this.accountSwitch = null;
     this.lastError = '';
     this.lastDevice = null;
     this.stopping = false;
@@ -243,12 +243,11 @@ class PhoneManager {
       if (detail) throw new Error(detail);
     }
     throw new Error(serial.startsWith('127.0.0.1:')
-      ? 'The paired phone is unreachable. Enable Connect to computer on the phone and use the same Tailscale account. After a phone restart, reconnect USB. This network may also block Tailscale.'
+      ? 'The paired phone is unreachable. Enable Connect to computer on the phone and check the internet connection. After a phone restart, reconnect USB.'
       : 'The phone is not responding over Wi-Fi. This Wi-Fi may block communication between devices. Keep USB connected and try Connect by USB again.');
   }
 
   connect(options = {}) {
-    if (this.accountSwitch) return this.accountSwitch;
     if (this.operation) return this.operation;
     this.cancelled = false;
     this.operation = this.connectInternal(options)
@@ -316,16 +315,7 @@ class PhoneManager {
     if (this.cancelled) throw new Error('Connection cancelled.');
     this.setStatus({ state: 'configuring', message: 'Direct Wi-Fi is unavailable. Preparing the secure connection...' });
     await this.network.start();
-    if (this.network.getStatus().state !== 'ready') {
-      this.setStatus({ state: 'configuring', message: 'Sign in below if requested. Keep USB connected while the secure connection starts.' });
-      const deadline = Date.now() + 180_000;
-      while (this.network.getStatus().state !== 'ready' && Date.now() < deadline) {
-        if (this.cancelled) throw new Error('Connection cancelled.');
-        if (this.network.getStatus().state === 'error' || this.network.getStatus().state === 'stopped') throw new Error('The secure connection stopped. Try connecting again.');
-        await this.sleep(1_000);
-      }
-      if (this.network.getStatus().state !== 'ready') throw new Error('Sign-in timed out. Connect by USB again after signing in.');
-    }
+    if (this.cancelled) throw new Error('Connection cancelled.');
     if (usbSerial && this.network.getStatus().pairedPhone && !this.network.matchesUsb(usbSerial)) throw new Error('A different phone is paired. Forget the saved phone on both devices before pairing this one.');
     if (!this.network.getStatus().pairedPhone) {
       if (!usbSerial) throw new Error('Keep USB connected and use Connect by USB once to approve the secure connection.');
@@ -338,7 +328,6 @@ class PhoneManager {
   }
 
   start(options = {}) {
-    if (this.accountSwitch) return this.accountSwitch;
     if (this.operation) return this.operation;
     this.cancelled = false;
     this.operation = this.startInternal(options)
@@ -382,6 +371,7 @@ class PhoneManager {
     const args = buildScrcpyArguments(device.serial, {
       turnScreenOff: options.turnScreenOff !== false,
       windowTitle: `WLSAPlus Phone - ${device.deviceName}`,
+      relay: device.paired,
     });
     const child = this.spawnProcess(this.scrcpyPath, args, {
       cwd: this.runtimeDirectory,
@@ -475,26 +465,6 @@ class PhoneManager {
     if (!this.lastDevice || this.status.state !== 'mirroring') throw new Error('Open the phone window before using remote controls.');
     await this.runAdb(['-s', this.lastDevice.serial, 'shell', 'input', 'keyevent', phoneActionKeyCode(action)]);
     return this.getStatus();
-  }
-
-  switchAccount() {
-    this.assertSupported();
-    if (!this.network) return Promise.reject(new Error('The secure phone connection component is unavailable.'));
-    if (this.accountSwitch) return this.accountSwitch;
-    this.accountSwitch = this.switchAccountInternal().finally(() => { this.accountSwitch = null; });
-    return this.accountSwitch;
-  }
-
-  async switchAccountInternal() {
-    try {
-      await this.disconnect();
-      this.setStatus({ state: 'configuring', message: 'Signing out of Tailscale...' });
-      await this.network.switchAccount();
-      return this.setStatus({ state: 'idle', message: 'Sign in to Tailscale below, then connect by USB to pair again. Forget the previous pairing on the phone too.' });
-    } catch (error) {
-      this.setStatus({ state: 'error', message: error.message || 'Could not switch Tailscale accounts.' });
-      throw error;
-    }
   }
 
   dispose() {

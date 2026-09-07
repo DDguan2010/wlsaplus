@@ -10,9 +10,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"tailscale.com/ipn"
-	"tailscale.com/tsnet"
 )
 
 func testBridge(t *testing.T) *Bridge {
@@ -24,14 +21,14 @@ func testBridge(t *testing.T) *Bridge {
 	b := NewBridge()
 	b.store = store
 	b.role = "phone"
-	b.s = &tsnet.Server{}
-	b.status = status{State: "ready", IP: "100.64.0.2"}
+	b.relayURL = "https://127.0.0.1:1"
+	b.status = status{State: "ready", Protocol: 2}
 	b.ctx, b.cancel = context.WithCancel(context.Background())
-	t.Cleanup(b.cancel)
+	t.Cleanup(b.Stop)
 	return b
 }
 func testPair() pairing {
-	return pairing{PeerIP: "100.64.0.1", Name: "My computer", Secret: strings.Repeat("12", 32)}
+	return pairing{Protocol: 2, Name: "My computer", Secret: strings.Repeat("12", 32)}
 }
 func postPair(b *Bridge, p pairing, origin string) *httptest.ResponseRecorder {
 	data, _ := json.Marshal(p)
@@ -98,18 +95,18 @@ func TestExpiredRejectedAndInvalidPairing(t *testing.T) {
 	if b.pending != nil || postPair(b, p, "").Code != 403 {
 		t.Fatal("rejected pairing remained open")
 	}
-	for _, ip := range []string{"127.0.0.1", "192.168.1.1", "100.63.0.1", "100.128.0.1", "::1", "example.com"} {
-		p.PeerIP = ip
+	for _, secret := range []string{"", "short", strings.Repeat("ff", 31), strings.Repeat("FG", 32)} {
+		p.Secret = secret
 		if validatePair(p) == nil {
-			t.Errorf("accepted %s", ip)
+			t.Errorf("accepted %s", secret)
 		}
 	}
-	for _, url := range []string{"https://login.tailscale.com.evil/a", "https://login.tailscale.com@evil/a", "http://login.tailscale.com/a", "javascript:alert(1)"} {
-		if ValidLoginURL(url) {
+	for _, url := range []string{"https://user:password@example.com", "https://example.com/path", "http://example.com", "javascript:alert(1)"} {
+		if validRelayURL(url) {
 			t.Errorf("accepted %s", url)
 		}
 	}
-	if !ValidLoginURL("https://login.tailscale.com/a/example") {
+	if !validRelayURL("https://phonewlsaplus.02studio.xyz") {
 		t.Fatal("valid URL rejected")
 	}
 }
@@ -157,7 +154,7 @@ func TestConnectionLimit(t *testing.T) {
 
 func TestEncryptedStorageRejectsTamperingAndWrongKey(t *testing.T) {
 	b := testBridge(t)
-	secret := []byte("private-tailnet-identity")
+	secret := []byte("private-pairing-identity")
 	if err := b.store.WriteState("test", secret); err != nil {
 		t.Fatal(err)
 	}
@@ -188,17 +185,51 @@ func TestEncryptedStorageRejectsTamperingAndWrongKey(t *testing.T) {
 	if err := b.store.WriteState("test", nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := b.store.ReadState("test"); err != ipn.ErrStateNotExist {
+	if _, err := b.store.ReadState("test"); err != errStateNotExist {
 		t.Fatal("delete failed", err)
 	}
 }
 
-func TestSwitchAccountRequiresInitializedConnection(t *testing.T) {
+func TestPairingRequiresInitializedConnection(t *testing.T) {
 	b := NewBridge()
-	if err := b.SwitchAccount(); err == nil || !strings.Contains(err.Error(), "enable") {
+	if err := b.AllowPairing(); err == nil || !strings.Contains(err.Error(), "enable") {
 		t.Fatalf("expected enable-connection error: %v", err)
 	}
 	if b.status.State != "stopped" {
-		t.Fatal("uninitialized switch changed state")
+		t.Fatal("uninitialized pairing changed state")
+	}
+}
+
+func TestStopInterruptsConnectionWait(t *testing.T) {
+	b := testBridge(t)
+	b.role = "desktop"
+	raw, _ := json.Marshal(testPair())
+	connected := make(chan error, 1)
+	go func() { connected <- b.Connect(string(raw)) }()
+	deadline := time.Now().Add(time.Second)
+	for {
+		b.mu.Lock()
+		waiting := b.relayCtx != nil
+		b.mu.Unlock()
+		if waiting {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Connect did not start")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	stopped := make(chan struct{})
+	go func() { b.Stop(); close(stopped) }()
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("Stop waited for the connection timeout")
+	}
+	if err := <-connected; err == nil {
+		t.Fatal("stopped connection succeeded")
+	}
+	if !strings.Contains(b.Status(), `"state":"stopped"`) {
+		t.Fatal("Stop did not clear connection state")
 	}
 }

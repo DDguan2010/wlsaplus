@@ -187,11 +187,13 @@ export type PhoneControlAction = 'back' | 'home' | 'recents' | 'power' | 'volume
 export interface PhoneNetworkStatus {
   state: string;
   active: number;
-  authUrl?: string;
+  protocol?: number;
+  connected?: boolean;
+  repairRequired?: boolean;
   pairedPhone?: string | null;
   error?: string;
   connectionError?: string;
-  tailnet?: string;
+  relay?: string;
 }
 
 export interface PhoneStatus {

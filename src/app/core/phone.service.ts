@@ -45,8 +45,4 @@ export class PhoneService {
     if (window.wlsaplus) this.status.set(await window.wlsaplus.phone.control(action));
   }
 
-  async signIn(): Promise<void> { await window.wlsaplus?.phone.signIn(); }
-  async switchAccount(): Promise<void> {
-    if (window.wlsaplus) this.status.set(await window.wlsaplus.phone.switchAccount());
-  }
 }

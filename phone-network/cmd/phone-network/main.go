@@ -43,8 +43,6 @@ func main() {
 			b.Stop()
 		case "forget":
 			err = b.Forget()
-		case "switch-account":
-			err = b.SwitchAccount()
 		default:
 			err = fmt.Errorf("unsupported command")
 		}

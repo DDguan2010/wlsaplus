@@ -52,8 +52,6 @@ contextBridge.exposeInMainWorld('wlsaplus', {
   },
   phone: {
     networkStatus: () => ipcRenderer.invoke('phone:network-status'),
-    signIn: () => ipcRenderer.invoke('phone:sign-in'),
-    switchAccount: () => ipcRenderer.invoke('phone:switch-account'),
     onNetworkStatus: callback => {
       const handler = (_event, status) => callback(status);
       ipcRenderer.on('phone:network-status', handler);

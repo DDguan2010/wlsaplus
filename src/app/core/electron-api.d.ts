@@ -64,8 +64,6 @@ declare global {
       };
       phone: {
         networkStatus(): Promise<PhoneNetworkStatus>;
-      signIn(): Promise<void>;
-      switchAccount(): Promise<PhoneStatus>;
         onNetworkStatus(callback: (status: PhoneNetworkStatus) => void): () => void;
         status(): Promise<PhoneStatus>;
         connect(options: { turnScreenOff: boolean }): Promise<PhoneStatus>;

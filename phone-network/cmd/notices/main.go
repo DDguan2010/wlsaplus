@@ -26,7 +26,7 @@ func writeNotices() error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("WLSAPlus embedded phone network: third-party license notices.\nTailscale is a third-party hosted service; WLSAPlus is not an official Tailscale client.")
+	fmt.Println("WLSAPlus encrypted Cloudflare phone relay: third-party license notices.")
 	decoder := json.NewDecoder(bytes.NewReader(output))
 	for {
 		var module struct {

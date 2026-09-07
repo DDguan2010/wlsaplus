@@ -10,9 +10,9 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-
-	"tailscale.com/ipn"
 )
+
+var errStateNotExist = errors.New("phone state does not exist")
 
 // Native hosts keep the encryption key in DPAPI / Android Keystore.
 type secureStore struct {
@@ -40,17 +40,17 @@ func newStore(dir, key string) (*secureStore, error) {
 	return &secureStore{dir: dir, aead: aead}, nil
 }
 
-func (s *secureStore) filename(id ipn.StateKey) string {
+func (s *secureStore) filename(id string) string {
 	sum := sha256.Sum256([]byte(id))
 	return filepath.Join(s.dir, hex.EncodeToString(sum[:])+".enc")
 }
 
-func (s *secureStore) ReadState(id ipn.StateKey) ([]byte, error) {
+func (s *secureStore) ReadState(id string) ([]byte, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	data, err := os.ReadFile(s.filename(id))
 	if os.IsNotExist(err) {
-		return nil, ipn.ErrStateNotExist
+		return nil, errStateNotExist
 	}
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func (s *secureStore) ReadState(id ipn.StateKey) ([]byte, error) {
 	return s.aead.Open(nil, data[:n], data[n:], []byte(id))
 }
 
-func (s *secureStore) WriteState(id ipn.StateKey, data []byte) error {
+func (s *secureStore) WriteState(id string, data []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if data == nil {
