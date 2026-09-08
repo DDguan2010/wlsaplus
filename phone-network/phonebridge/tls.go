@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+var errPeerAuthentication = errors.New("paired device key mismatch")
+
 func deriveKey(secret []byte, label string) []byte {
 	key, err := hkdf.Key(sha256.New, secret, nil, "wlsaplus-phone-v2/"+label, 32)
 	if err != nil {
@@ -48,11 +50,11 @@ func tlsConfig(p pairing, role string) (*tls.Config, error) {
 	// either device; standard TLS 1.3 supplies encryption and forward secrecy.
 	cfg.VerifyConnection = func(state tls.ConnectionState) error {
 		if len(state.PeerCertificates) != 1 {
-			return errors.New("missing pinned peer certificate")
+			return errPeerAuthentication
 		}
 		key, ok := state.PeerCertificates[0].PublicKey.(ed25519.PublicKey)
 		if !ok || !bytes.Equal(key, peer) {
-			return errors.New("paired device key mismatch")
+			return errPeerAuthentication
 		}
 		return nil
 	}

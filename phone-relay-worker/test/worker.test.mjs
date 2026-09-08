@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { Miniflare, convertV4MiniflareOptions } from 'miniflare';
+import { readFile } from 'node:fs/promises';
 
 test('relay authentication, pairing, isolation, forwarding and revocation', { timeout: 60000 }, async t => {
   const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, scriptPath: fileURLToPath(new URL('../src/worker.js', import.meta.url)), compatibilityDate: '2026-08-31', durableObjects: { PHONE_ROOMS: { className: 'PhoneRoom', useSQLite: true } } }));
@@ -71,4 +72,53 @@ test('relay authentication, pairing, isolation, forwarding and revocation', { ti
   const afterReplacement = event(newPhone, 'message');
   newDesktop.send(new Uint8Array([7]));
   assert.deepEqual([...new Uint8Array((await afterReplacement).data)], [7]);
+});
+
+test('active rooms survive cleanup alarms and the former lifetime data limit', { timeout: 60000 }, async t => {
+  // This test-only subclass lets us simulate elapsed hours and prior traffic
+  // inside the actual Durable Object runtime, without public test endpoints.
+  const source = await readFile(new URL('../src/worker.js', import.meta.url), 'utf8');
+  const harness = `
+    export class TestPhoneRoom extends PhoneRoom {
+      async fetch(request) {
+        const action = request.headers.get('X-Test-Action');
+        if (action === 'alarm') {
+          await this.alarm();
+          return Response.json({ retained: Boolean(await this.ctx.storage.get('tokenHash')), alarm: await this.ctx.storage.getAlarm() });
+        }
+        if (action === 'old-traffic') {
+          for (const ws of this.ctx.getWebSockets()) ws.serializeAttachment({ ...ws.deserializeAttachment(), bytes: 1024 * 1024 * 1024 });
+          return new Response('ok');
+        }
+        return super.fetch(request);
+      }
+    }`;
+  const mf = new Miniflare(convertV4MiniflareOptions({ modules: true, script: source + harness, compatibilityDate: '2026-08-31', durableObjects: { PHONE_ROOMS: { className: 'TestPhoneRoom', useSQLite: true } } }));
+  t.after(() => mf.dispose());
+  const room = '78'.repeat(32);
+  const namespace = await mf.getDurableObjectNamespace('PHONE_ROOMS');
+  const stub = namespace.get(namespace.idFromName(room));
+  const control = action => stub.fetch('http://test/control', { headers: { 'X-Test-Action': action } });
+  const request = role => mf.dispatchFetch(`http://relay.test/v2/rooms/${room}/${role}`, { headers: {
+    Upgrade: 'websocket', Authorization: `Bearer ${'ab'.repeat(32)}`, 'X-WLSA-Protocol': '2',
+  } });
+  const phone = (await request('phone')).webSocket; phone.accept();
+  const message = ws => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('relay message timeout')), 3000);
+    ws.addEventListener('message', event => { clearTimeout(timer); resolve(event.data); }, { once: true });
+  });
+  const ready = message(phone);
+  const desktop = (await request('desktop')).webSocket; desktop.accept(); await ready;
+  t.after(() => { for (const ws of [phone, desktop]) { try { ws.close(); } catch {} } });
+  for (let cycle = 0; cycle < 3; cycle++) {
+    const result = await (await control('alarm')).json();
+    assert.equal(result.retained, true); assert.ok(result.alarm > Date.now());
+    await control('old-traffic');
+    const received = message(phone); desktop.send(new Uint8Array([cycle]));
+    assert.deepEqual([...new Uint8Array(await received)], [cycle]);
+  }
+  const closed = new Promise(resolve => desktop.addEventListener('close', resolve, { once: true }));
+  phone.close(); await closed;
+  const idle = await (await control('alarm')).json();
+  assert.equal(idle.retained, false);
 });

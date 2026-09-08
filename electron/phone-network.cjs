@@ -84,7 +84,7 @@ class PhoneNetwork {
     return new Promise((resolve, reject) => {
       if (!this.child) return reject(new Error('Enable the secure connection first.'));
       const id = this.nextId++;
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('The secure connection did not respond in time.')); }, 30_000);
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('The secure connection did not respond in time.')); }, method === 'connect' ? 60_000 : 30_000);
       this.pending.set(id, { resolve, reject, timer });
       this.child.stdin.write(`${JSON.stringify({ id, method, config })}\n`, error => { if (error) { clearTimeout(timer); this.pending.delete(id); reject(error); } });
     });

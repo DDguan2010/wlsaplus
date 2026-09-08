@@ -117,7 +117,7 @@ export class PhonePage {
   });
   readonly turnScreenOff = signal(localStorage.getItem('wlsaplus:phone-screen-off') !== 'false');
   readonly guideUrl = 'https://wlsaplus.02studio.xyz/blog/set-up-phone-control-on-windows/';
-  readonly working = computed(() => ['waiting-usb', 'waiting-authorization', 'configuring', 'connecting', 'stopping'].includes(this.status().state));
+  readonly working = computed(() => ['waiting-usb', 'waiting-authorization', 'configuring', 'connecting', 'reconnecting', 'stopping'].includes(this.status().state));
   readonly canReopen = computed(() => Boolean(this.status().serial || this.network().pairedPhone) && ['idle', 'ready', 'error'].includes(this.status().state));
   readonly controls: { action: PhoneControlAction; label: string; icon: string }[] = [
     { action: 'back', label: 'Back', icon: 'arrow_back' },
@@ -135,6 +135,7 @@ export class PhonePage {
     'waiting-authorization': 'phonelink_lock',
     configuring: 'settings_input_antenna',
     connecting: 'wifi',
+    reconnecting: 'sync',
     mirroring: 'cast_connected',
     ready: 'smartphone',
     stopping: 'progress_activity',
@@ -148,6 +149,7 @@ export class PhonePage {
     'waiting-authorization': 'Authorization needed',
     configuring: 'Setting up wireless mode',
     connecting: 'Connecting to phone',
+    reconnecting: 'Reconnecting to phone',
     mirroring: 'Phone is connected',
     ready: 'Ready to reopen',
     stopping: 'Closing phone window',

@@ -181,7 +181,7 @@ export interface PlatformInfo {
   supportsPhoneControl: boolean;
 }
 
-export type PhoneConnectionState = 'unsupported' | 'idle' | 'waiting-usb' | 'waiting-authorization' | 'configuring' | 'connecting' | 'ready' | 'mirroring' | 'stopping' | 'error';
+export type PhoneConnectionState = 'unsupported' | 'idle' | 'waiting-usb' | 'waiting-authorization' | 'configuring' | 'connecting' | 'reconnecting' | 'ready' | 'mirroring' | 'stopping' | 'error';
 export type PhoneControlAction = 'back' | 'home' | 'recents' | 'power' | 'volume-up' | 'volume-down';
 
 export interface PhoneNetworkStatus {

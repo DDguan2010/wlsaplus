@@ -8,6 +8,9 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.PowerManager;
+import android.net.Uri;
+import android.provider.Settings;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -17,7 +20,7 @@ import org.json.JSONObject;
 
 public final class PhoneReceiverActivity extends Activity {
     private final Handler handler = new Handler();
-    private TextView status, approval;
+    private TextView status, approval, batteryHint;
     private Button enable, pair, approve, reject, forget, stop;
     private String code = "";
     private LinearLayout layout;
@@ -57,8 +60,10 @@ public final class PhoneReceiverActivity extends Activity {
         forget = button("Forget computer", () -> new AlertDialog.Builder(this).setTitle("Forget this computer?")
             .setMessage("This stops its access immediately. USB approval will be required to connect again.")
             .setNegativeButton("Cancel", null).setPositiveButton("Forget", (dialog, which) -> command("forget", "")).show());
-        stop = button("Stop connection", () -> stopService(new Intent(this, PhoneReceiverService.class)));
-        text("After the Windows phone window opens, you can unplug USB. After restarting the phone, connect USB again to enable debugging. Stop the connection when finished. Battery restrictions or network interruptions can disconnect it.", 14);
+        stop = button("Stop connection", () -> startService(new Intent(this, PhoneReceiverService.class).setAction("stop")));
+        batteryHint = text("", 14);
+        button("Background settings", () -> startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + getPackageName()))));
+        text("After the Windows phone window opens, you can unplug USB. Temporary network interruptions reconnect automatically. After restarting the phone, connect USB again to enable debugging. Stop connection keeps your pairing and disables recovery until you enable it again.", 14);
         button("Back", this::finish);
     }
 
@@ -91,6 +96,10 @@ public final class PhoneReceiverActivity extends Activity {
         approval.setText(code.isEmpty() ? "" : value.optString("pending") + "\n" + code);
         approve.setVisibility(code.isEmpty() ? View.GONE : View.VISIBLE); reject.setVisibility(code.isEmpty() ? View.GONE : View.VISIBLE);
         forget.setVisibility(peer.isEmpty() ? View.GONE : View.VISIBLE);
+        boolean unrestricted = getSystemService(PowerManager.class).isIgnoringBatteryOptimizations(getPackageName());
+        batteryHint.setText(unrestricted
+            ? "Keep this app running while controlling your phone. Force-stopping it prevents automatic recovery."
+            : "To keep the connection active with the screen off, open Background settings and allow unrestricted battery use. On phones with an autostart setting, enable it for this app too. Android may still stop a restricted app.");
     }
     @Override public void onResume() { super.onResume(); handler.post(refresh); }
     @Override public void onPause() { handler.removeCallbacks(refresh); super.onPause(); }

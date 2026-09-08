@@ -57,10 +57,11 @@ from `phone-network`. This uses synthetic temporary identities, not a real phone
   Rate and size limits reduce abuse but cannot prevent all distributed abuse.
   Operators should monitor Cloudflare usage and configure billing alerts.
 - Limits: 240 upgrade requests/minute/IP, 64 KiB/frame, 4 MiB/second and
-  1,024 messages/second per sender, 1 GiB per socket session. Rooms expire after
-  two hours. Closing one side closes its counterpart; clients reconnect with
-  bounded exponential backoff. A long mirror may need to be reopened after a
-  quota or session renewal.
+  1,024 messages/second per sender. Healthy sessions have no lifetime byte limit
+  or forced two-hour expiry. A two-hour cleanup alarm retains rooms with active
+  sockets and removes unused rooms. Closing one side closes its counterpart;
+  clients reconnect with bounded exponential backoff. Windows retries mirroring
+  after an unexpected device disconnect, with a Cancel button and bounded attempts.
 - Hibernatable WebSockets are used, but active forwarding still incurs Durable
   Object requests, compute/storage and any applicable Cloudflare charges.
   Logging is disabled. Cloudflare can see connection metadata and traffic size.

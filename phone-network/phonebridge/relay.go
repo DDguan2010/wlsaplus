@@ -35,6 +35,8 @@ func (b *Bridge) beginRelay(p pairing) {
 	ctx, cancel := context.WithCancel(b.ctx)
 	b.relayCtx = ctx
 	b.relayCancel = cancel
+	wake := make(chan struct{}, 1)
+	b.relayWake = wake
 	b.forwardPair = p
 	b.status.State = "connecting"
 	b.status.Peer = p.Name
@@ -66,14 +68,33 @@ func (b *Bridge) beginRelay(p pairing) {
 				timer.Stop()
 				return
 			case <-timer.C:
+			case <-wake:
+				timer.Stop()
+				backoff = time.Second
 			}
-			if backoff < 15*time.Second {
+			if backoff < 8*time.Second {
 				backoff *= 2
 			}
 		}
 	}()
 }
 func (b *Bridge) runRelay(ctx context.Context, p pairing) error {
+	connectionCtx, end := context.WithCancel(ctx)
+	defer end()
+	b.mu.Lock()
+	if b.relayCtx != ctx || ctx.Err() != nil {
+		b.mu.Unlock()
+		return context.Canceled
+	}
+	b.relayAttemptCancel = end
+	b.mu.Unlock()
+	defer func() {
+		b.mu.Lock()
+		if b.relayCtx == ctx {
+			b.relayAttemptCancel = nil
+		}
+		b.mu.Unlock()
+	}()
 	room, token := relayCredentials(p)
 	b.mu.Lock()
 	role := b.role
@@ -82,7 +103,7 @@ func (b *Bridge) runRelay(ctx context.Context, p pairing) error {
 	u = strings.Replace(u, "http://", "ws://", 1) + "/v2/rooms/" + room + "/" + role
 	// Redirects must never forward the relay bearer credential to another host.
 	client := &http.Client{CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	dial, done := context.WithTimeout(ctx, 12*time.Second)
+	dial, done := context.WithTimeout(connectionCtx, 12*time.Second)
 	c, response, err := websocket.Dial(dial, u, &websocket.DialOptions{HTTPClient: client, HTTPHeader: http.Header{"Authorization": []string{"Bearer " + token}, "X-WLSA-Protocol": []string{"2"}}, CompressionMode: websocket.CompressionDisabled})
 	done()
 	if err != nil {
@@ -100,8 +121,6 @@ func (b *Bridge) runRelay(ctx context.Context, p pairing) error {
 	}
 	defer c.CloseNow()
 	c.SetReadLimit(65536)
-	connectionCtx, end := context.WithCancel(ctx)
-	defer end()
 	stop := context.AfterFunc(connectionCtx, func() { c.CloseNow() })
 	defer stop()
 	// Detect broken sockets even while waiting for the paired device to come online.
@@ -142,7 +161,10 @@ func (b *Bridge) runRelay(ctx context.Context, p pairing) error {
 	raw := websocket.NetConn(connectionCtx, c, websocket.MessageBinary)
 	secure, err := secureConnection(connectionCtx, raw, p, role)
 	if err != nil {
-		return errors.New("the other device could not be authenticated; forget the pairing on both devices and pair again by USB")
+		if errors.Is(err, errPeerAuthentication) {
+			return errors.New("the paired device key does not match; approve this computer again by USB")
+		}
+		return errors.New("secure phone handshake interrupted; reconnecting with the saved pairing")
 	}
 	defer secure.Close()
 	cfg := yamux.DefaultConfig()
@@ -162,9 +184,9 @@ func (b *Bridge) runRelay(ctx context.Context, p pairing) error {
 	}
 	defer session.Close()
 	b.mu.Lock()
-	if b.relayCtx != ctx || ctx.Err() != nil {
+	if b.relayCtx != ctx || connectionCtx.Err() != nil {
 		b.mu.Unlock()
-		return ctx.Err()
+		return context.Canceled
 	}
 	b.session = session
 	b.status.State = "ready"

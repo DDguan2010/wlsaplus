@@ -102,6 +102,11 @@ class PhoneManager {
     this.lastDevice = null;
     this.stopping = false;
     this.cancelled = false;
+    this.recoveryTimer = null;
+    this.recoveryGeneration = 0;
+    this.recoveryAttempts = 0;
+    this.recovering = false;
+    this.mirrorOptions = null;
     this.status = {
       state: platform === 'win32' ? 'idle' : 'unsupported',
       message: platform === 'win32' ? 'Connect an Android phone by USB to begin.' : 'Phone control is available on Windows only.',
@@ -249,10 +254,12 @@ class PhoneManager {
 
   connect(options = {}) {
     if (this.operation) return this.operation;
+    this.cancelRecovery();
+    this.mirrorOptions = { turnScreenOff: options.turnScreenOff !== false };
     this.cancelled = false;
     this.operation = this.connectInternal(options)
       .catch((error) => {
-        if (this.cancelled) return this.getStatus();
+        if (this.cancelled || this.recovering) return this.getStatus();
         this.setStatus({ state: 'error', message: error instanceof Error ? error.message : 'Could not connect to the phone.' });
         throw error;
       })
@@ -313,7 +320,9 @@ class PhoneManager {
 
   async pairedEndpoint(usbSerial) {
     if (this.cancelled) throw new Error('Connection cancelled.');
-    this.setStatus({ state: 'configuring', message: 'Direct Wi-Fi is unavailable. Preparing the secure connection...' });
+    this.setStatus({ state: this.recovering ? 'reconnecting' : 'configuring', message: this.recovering
+      ? 'Waiting for the paired phone to reconnect. Keep Connect to computer enabled on Android.'
+      : 'Direct Wi-Fi is unavailable. Preparing the secure connection...' });
     await this.network.start();
     if (this.cancelled) throw new Error('Connection cancelled.');
     if (usbSerial && this.network.getStatus().pairedPhone && !this.network.matchesUsb(usbSerial)) throw new Error('A different phone is paired. Forget the saved phone on both devices before pairing this one.');
@@ -329,10 +338,12 @@ class PhoneManager {
 
   start(options = {}) {
     if (this.operation) return this.operation;
+    this.cancelRecovery();
+    this.mirrorOptions = { turnScreenOff: options.turnScreenOff !== false };
     this.cancelled = false;
     this.operation = this.startInternal(options)
       .catch((error) => {
-        if (this.cancelled) return this.getStatus();
+        if (this.cancelled || this.recovering) return this.getStatus();
         this.setStatus({ state: 'error', message: error instanceof Error ? error.message : 'Could not reopen the phone.' });
         throw error;
       })
@@ -348,7 +359,7 @@ class PhoneManager {
     }
     if (!this.lastDevice) throw new Error('Set up the phone by USB before reopening it wirelessly.');
     await this.stopProcess();
-    this.setStatus({ state: 'connecting', message: `Reconnecting to ${this.lastDevice.deviceName}...`, screenOff: options.turnScreenOff !== false });
+    this.setStatus({ state: this.recovering ? 'reconnecting' : 'connecting', message: `Reconnecting to ${this.lastDevice.deviceName}...`, screenOff: options.turnScreenOff !== false });
     if (this.lastDevice.paired) this.lastDevice.serial = await this.pairedEndpoint();
     try { await this.connectWireless(this.lastDevice.serial); }
     catch (error) {
@@ -361,6 +372,46 @@ class PhoneManager {
       this.lastDevice.sdk = Number.parseInt(stdout, 10) || 0;
     }
     return this.launch(options);
+  }
+
+  cancelRecovery() {
+    this.recoveryGeneration++;
+    clearTimeout(this.recoveryTimer);
+    this.recoveryTimer = null;
+    this.recoveryAttempts = 0;
+    this.recovering = false;
+  }
+
+  scheduleRecovery() {
+    if (this.cancelled || !this.mirrorOptions || !this.lastDevice) return;
+    clearTimeout(this.recoveryTimer);
+    if (this.recoveryAttempts >= 6) {
+      this.cancelRecovery();
+      this.setStatus({ state: 'error', message: 'The phone is still unavailable. Enable Connect to computer on Android, then select Open wirelessly. After a phone restart, reconnect USB.' });
+      return;
+    }
+    this.recovering = true;
+    this.setStatus({ state: 'reconnecting', message: 'Phone connection interrupted. Reconnecting automatically; select Cancel to stop.' });
+    const generation = this.recoveryGeneration;
+    const options = { ...this.mirrorOptions };
+    const run = () => {
+      this.recoveryTimer = null;
+      if (this.cancelled || generation !== this.recoveryGeneration) return;
+      // A mirror can disconnect before its original start call has settled.
+      if (this.operation) { this.recoveryTimer = setTimeout(run, 100); return; }
+      this.recoveryAttempts++;
+      const operation = this.startInternal(options).catch(error => {
+        if (this.cancelled || generation !== this.recoveryGeneration) return;
+        if (/Android debugging is off|allow USB debugging|unauthorized|paired device key|approve this computer|different phone|pair the phone again/i.test(error.message)) {
+          this.cancelRecovery();
+          this.setStatus({ state: 'error', message: error.message });
+        } else {
+          this.scheduleRecovery();
+        }
+      }).finally(() => { if (this.operation === operation) this.operation = null; });
+      this.operation = operation;
+    };
+    this.recoveryTimer = setTimeout(run, Math.min(2_000 * 2 ** this.recoveryAttempts, 15_000));
   }
 
   async launch(options) {
@@ -391,6 +442,16 @@ class PhoneManager {
       this.scrcpyProcess = null;
       if (this.stopping) return;
       const detail = this.lastError.trim().split(/\r?\n/).filter(Boolean).at(-1);
+      // scrcpy exit 2 means a lost device. Exit 0 is the user closing the window.
+      if (!this.cancelled && code !== 0 && this.mirrorOptions &&
+          (code === 2 || /device disconnected|device offline|connection (?:closed|reset)|broken pipe/i.test(this.lastError))) {
+        this.scheduleRecovery();
+        return;
+      }
+      if (code === 0) {
+        this.mirrorOptions = null;
+        this.cancelRecovery();
+      }
       this.setStatus(code === 0
         ? { state: 'ready', message: 'Phone window closed. You can reopen it wirelessly.' }
         : { state: 'error', message: detail ? `Phone window closed: ${detail}` : 'Phone window closed unexpectedly.' });
@@ -400,6 +461,8 @@ class PhoneManager {
       child.once('error', (error) => { clearTimeout(timer); reject(error); });
       child.once('close', (code) => { clearTimeout(timer); reject(new Error(`scrcpy exited with code ${code}. ${this.lastError.trim()}`.trim())); });
     });
+    if (this.cancelled || this.scrcpyProcess !== child) throw new Error('Phone connection cancelled.');
+    this.cancelRecovery();
     return this.setStatus({
       state: 'mirroring',
       message: device.sdk >= 30 ? 'Phone connected with video, sound, and controls.' : 'Phone connected. Audio needs Android 11 or newer.',
@@ -429,6 +492,8 @@ class PhoneManager {
   async stop() {
     this.assertSupported();
     this.cancelled = true;
+    this.mirrorOptions = null;
+    this.cancelRecovery();
     if (this.operation) {
       await this.network?.dispose();
       await this.operation.catch(() => {});
@@ -443,6 +508,8 @@ class PhoneManager {
   async disconnect() {
     this.assertSupported();
     this.cancelled = true;
+    this.mirrorOptions = null;
+    this.cancelRecovery();
     await this.network?.dispose();
     if (this.operation) await this.operation.catch(() => {});
     await this.stopProcess();
@@ -469,6 +536,8 @@ class PhoneManager {
 
   dispose() {
     this.cancelled = true;
+    this.mirrorOptions = null;
+    this.cancelRecovery();
     this.stopping = true;
     const child = this.scrcpyProcess;
     this.scrcpyProcess = null;

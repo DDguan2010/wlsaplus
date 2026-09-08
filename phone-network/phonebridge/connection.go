@@ -51,26 +51,28 @@ type status struct {
 
 // Bridge exposes only simple methods for the Android gomobile binding.
 type Bridge struct {
-	lifecycle    sync.Mutex
-	mu           sync.Mutex
-	store        *secureStore
-	ctx          context.Context
-	cancel       context.CancelFunc
-	role         string
-	trusted      *pairing
-	pending      *pendingPair
-	pairingUntil time.Time
-	pairServer   *http.Server
-	forward      net.Listener
-	forwardPair  pairing
-	relayCtx     context.Context
-	relayCancel  context.CancelFunc
-	session      *yamux.Session
-	streams      map[net.Conn]bool
-	status       status
-	relayURL     string
-	pairAddress  string
-	adbAddress   string
+	lifecycle          sync.Mutex
+	mu                 sync.Mutex
+	store              *secureStore
+	ctx                context.Context
+	cancel             context.CancelFunc
+	role               string
+	trusted            *pairing
+	pending            *pendingPair
+	pairingUntil       time.Time
+	pairServer         *http.Server
+	forward            net.Listener
+	forwardPair        pairing
+	relayCtx           context.Context
+	relayCancel        context.CancelFunc
+	relayAttemptCancel context.CancelFunc
+	relayWake          chan struct{}
+	session            *yamux.Session
+	streams            map[net.Conn]bool
+	status             status
+	relayURL           string
+	pairAddress        string
+	adbAddress         string
 }
 
 func NewBridge() *Bridge {
@@ -256,7 +258,7 @@ func (b *Bridge) Connect(raw string) error {
 		b.closeRelay()
 		b.beginRelay(p)
 	}
-	wait, done := context.WithTimeout(ctx, 18*time.Second)
+	wait, done := context.WithTimeout(ctx, 45*time.Second)
 	defer done()
 	s, err := b.waitSession(wait)
 	if err != nil {
@@ -313,6 +315,29 @@ func (b *Bridge) Connect(raw string) error {
 	}()
 	return nil
 }
+
+// NetworkChanged discards a socket tied to a lost Android network, keeping the
+// approved pair and local ADB listener. It also interrupts reconnect backoff.
+func (b *Bridge) NetworkChanged() {
+	b.mu.Lock()
+	cancel, wake := b.relayAttemptCancel, b.relayWake
+	if b.relayCancel != nil {
+		b.session = nil
+		b.status.Connected = false
+		b.status.State = "connecting"
+	}
+	b.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+	if wake != nil {
+		select {
+		case wake <- struct{}{}:
+		default:
+		}
+	}
+}
+
 func (b *Bridge) waitSession(ctx context.Context) (*yamux.Session, error) {
 	timer := time.NewTicker(100 * time.Millisecond)
 	defer timer.Stop()
@@ -407,6 +432,8 @@ func (b *Bridge) closeRelay() {
 	cancel := b.relayCancel
 	b.relayCancel = nil
 	b.relayCtx = nil
+	b.relayAttemptCancel = nil
+	b.relayWake = nil
 	s := b.session
 	b.session = nil
 	ln := b.forward

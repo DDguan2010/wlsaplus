@@ -4,10 +4,16 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"github.com/coder/websocket"
 	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
@@ -66,12 +72,42 @@ func TestTLSAuthenticatesOnlyMatchingPairAndOppositeRole(t *testing.T) {
 	p := testPair()
 	desktop, _ := tlsConfig(p, "desktop")
 	phone, _ := tlsConfig(p, "phone")
+	cert, _ := x509.ParseCertificate(desktop.Certificates[0].Certificate[0])
+	if err := desktop.VerifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}); !errors.Is(err, errPeerAuthentication) {
+		t.Fatal("same-role certificate did not report an authentication error", err)
+	}
+	if err := phone.VerifyConnection(tls.ConnectionState{PeerCertificates: []*x509.Certificate{cert}}); err != nil {
+		t.Fatal("approved opposite-role certificate rejected", err)
+	}
 	if bytes.Equal(desktop.Certificates[0].Certificate[0], phone.Certificates[0].Certificate[0]) {
 		t.Fatal("roles share a certificate")
 	}
 	room, token := relayCredentials(p)
 	if len(room) != 64 || len(token) != 64 || room == token || token == p.Secret {
 		t.Fatal("relay credential exposes pairing key")
+	}
+}
+
+func TestInterruptedHandshakeKeepsSavedPairing(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		c, err := websocket.Accept(w, r, nil)
+		if err != nil {
+			return
+		}
+		defer c.CloseNow()
+		c.Write(r.Context(), websocket.MessageText, []byte(`{"type":"ready","protocol":2}`))
+		c.Close(websocket.StatusGoingAway, "network changed")
+	}))
+	defer server.Close()
+	b := NewBridge()
+	b.relayURL = server.URL
+	b.ctx, b.cancel = context.WithCancel(context.Background())
+	b.relayCtx = b.ctx
+	b.role = "desktop"
+	t.Cleanup(b.Stop)
+	err := b.runRelay(b.ctx, testPair())
+	if err == nil || !strings.Contains(err.Error(), "handshake interrupted") || strings.Contains(err.Error(), "again by USB") {
+		t.Fatal("network interruption was confused with a lost pairing", err)
 	}
 }
 
@@ -148,6 +184,32 @@ func TestCloudflareRelayIntegration(t *testing.T) {
 	}
 	if strings.Contains(phone.Status(), p.Secret) || strings.Contains(desktop.Status(), p.Secret) {
 		t.Fatal("status exposes secret")
+	}
+	for change := 0; change < 3; change++ {
+		phone.NetworkChanged()
+		if change%2 == 0 {
+			desktop.NetworkChanged()
+		}
+		conn.SetDeadline(time.Now().Add(5 * time.Second))
+		if _, err := conn.Read(make([]byte, 1)); err == nil {
+			t.Fatal("old stream survived network loss")
+		}
+		conn.Close()
+		if err := desktop.Connect(string(raw)); err != nil {
+			t.Fatal("network change did not recover", err)
+		}
+		conn, err = net.DialTimeout("tcp", address, time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		conn.SetDeadline(time.Now().Add(10 * time.Second))
+		if _, err = conn.Write([]byte("reconnected")); err != nil {
+			t.Fatal(err)
+		}
+		got := make([]byte, len("reconnected"))
+		if _, err = io.ReadFull(conn, got); err != nil || string(got) != "reconnected" {
+			t.Fatal("recovered stream failed", err)
+		}
 	}
 	phone.Stop()
 	conn.SetDeadline(time.Now().Add(3 * time.Second))

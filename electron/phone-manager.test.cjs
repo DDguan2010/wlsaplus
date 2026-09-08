@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { EventEmitter } = require('node:events');
 const {
   PhoneManager,
   buildScrcpyArguments,
@@ -278,4 +279,118 @@ test('relay video uses a lower bitrate and frame size without changing direct Wi
   const relay = buildScrcpyArguments('127.0.0.1:40001', { relay: true });
   for (const flag of ['--max-size=1280', '--max-fps=30', '--video-bit-rate=2M', '--video-buffer=0']) assert.ok(relay.includes(flag));
   assert.equal(buildScrcpyArguments('192.168.1.2:5555').some(flag => flag.startsWith('--video-bit-rate')), false);
+});
+
+async function flushTasks() {
+  await new Promise(resolve => setImmediate(resolve));
+}
+
+async function mirroredManager(t) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const { manager, network, calls } = automaticManager();
+  const children = [];
+  manager.launch = PhoneManager.prototype.launch;
+  manager.spawnProcess = (_file, args) => {
+    const child = new EventEmitter();
+    child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); child.exitCode = null;
+    child.close = code => { child.exitCode = code; child.emit('close', code); };
+    child.kill = () => child.close(0);
+    child.args = args; children.push(child); return child;
+  };
+  t.after(() => manager.dispose());
+  const opening = manager.start({ turnScreenOff: false });
+  await flushTasks(); t.mock.timers.tick(900); await opening;
+  assert.equal(manager.status.state, 'mirroring');
+  return { manager, network, calls, children };
+}
+
+test('lost mirroring reopens using the saved pair and display preference', async t => {
+  const { manager, children, calls } = await mirroredManager(t);
+  children[0].close(2);
+  assert.equal(manager.status.state, 'reconnecting');
+  t.mock.timers.tick(2000); await flushTasks();
+  assert.equal(children.length, 2);
+  const recovery = manager.operation;
+  t.mock.timers.tick(900); await recovery;
+  assert.equal(manager.status.state, 'mirroring');
+  assert.equal(children[1].args.includes('--turn-screen-off'), false);
+  assert.equal(calls.filter(call => call === 'network-endpoint').length, 2);
+  assert.equal(calls.some(call => call.includes('kill-server')), false);
+});
+
+test('closing the mirror manually or cancelling recovery never reopens it', async t => {
+  const { manager, children } = await mirroredManager(t);
+  children[0].close(0);
+  t.mock.timers.tick(60000); await flushTasks();
+  assert.equal(children.length, 1);
+  assert.equal(manager.status.state, 'ready');
+  const opening = manager.start(); await flushTasks(); t.mock.timers.tick(900); await opening;
+  children[1].close(2);
+  await manager.stop();
+  t.mock.timers.tick(60000); await flushTasks();
+  assert.equal(children.length, 2);
+  assert.equal(manager.status.state, 'ready');
+});
+
+test('recovery survives a failed attempt and stops for disabled Android debugging', async t => {
+  const { manager, network, children } = await mirroredManager(t);
+  const originalEndpoint = network.endpoint;
+  network.endpoint = async () => { throw new Error('could not reach relay'); };
+  children[0].close(2);
+  t.mock.timers.tick(2000); await flushTasks();
+  assert.equal(manager.status.state, 'reconnecting');
+  network.endpoint = originalEndpoint;
+  t.mock.timers.tick(4000); await flushTasks();
+  const recovery = manager.operation; t.mock.timers.tick(900); await recovery;
+  assert.equal(manager.status.state, 'mirroring');
+  network.endpoint = async () => { throw new Error('Android debugging is off; reconnect USB'); };
+  children[1].close(2);
+  t.mock.timers.tick(2000); await flushTasks();
+  assert.equal(manager.status.state, 'error');
+  assert.match(manager.status.message, /debugging is off/);
+  t.mock.timers.tick(60000); await flushTasks();
+  assert.equal(children.length, 2);
+});
+
+test('forget and application quit cancel pending mirror recovery', async t => {
+  const { manager, network, children } = await mirroredManager(t);
+  let forgotten = false;
+  network.forget = async () => { forgotten = true; };
+  children[0].close(2);
+  await manager.disconnect();
+  t.mock.timers.tick(60000); await flushTasks();
+  assert.equal(forgotten, true); assert.equal(children.length, 1);
+  assert.equal(manager.lastDevice, null);
+  const opening = manager.start(); await flushTasks(); t.mock.timers.tick(900); await opening;
+  children[1].close(2); manager.dispose();
+  t.mock.timers.tick(60000); await flushTasks();
+  assert.equal(children.length, 2);
+});
+
+test('a late relay reply after Cancel cannot launch a new mirror', async t => {
+  const { manager, network, children } = await mirroredManager(t);
+  let release;
+  network.endpoint = () => new Promise(resolve => { release = () => resolve('127.0.0.1:43001'); });
+  children[0].close(2); t.mock.timers.tick(2000); await flushTasks();
+  assert.ok(release);
+  const stopped = manager.stop(); release(); await stopped;
+  t.mock.timers.tick(60000); await flushTasks();
+  assert.equal(children.length, 1); assert.equal(manager.status.state, 'ready');
+});
+
+test('unreachable phones have bounded recovery and unrelated crashes are not retried', async t => {
+  const { manager, network, children } = await mirroredManager(t);
+  let attempts = 0;
+  network.endpoint = async () => { attempts++; throw new Error('relay unreachable'); };
+  children[0].close(2);
+  for (const delay of [2000, 4000, 8000, 15000, 15000, 15000]) {
+    t.mock.timers.tick(delay); await flushTasks();
+  }
+  assert.equal(attempts, 6); assert.equal(manager.status.state, 'error');
+  t.mock.timers.tick(60000); await flushTasks(); assert.equal(attempts, 6);
+  network.endpoint = async () => '127.0.0.1:43001';
+  const opening = manager.start(); await flushTasks(); t.mock.timers.tick(900); await opening;
+  children[1].stderr.emit('data', Buffer.from('Unsupported video encoder'));
+  children[1].close(1); t.mock.timers.tick(60000); await flushTasks();
+  assert.equal(children.length, 2); assert.match(manager.status.message, /Unsupported video encoder/);
 });

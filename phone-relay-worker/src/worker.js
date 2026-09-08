@@ -2,8 +2,7 @@ import { DurableObject } from 'cloudflare:workers';
 
 const pathPattern = /^\/v2\/rooms\/([a-f0-9]{64})\/(phone|desktop)$/;
 const tokenPattern = /^Bearer ([a-f0-9]{64})$/;
-const sessionMs = 2 * 60 * 60 * 1000;
-const maxBytes = 1024 * 1024 * 1024;
+const idleRoomMs = 2 * 60 * 60 * 1000;
 
 function reject(status, message) {
   return new Response(message, { status, headers: { 'Cache-Control': 'no-store' } });
@@ -55,7 +54,7 @@ export class PhoneRoom extends DurableObject {
       if (saved && saved !== tokenHash) return false;
       if (!saved) {
         await this.ctx.storage.put('tokenHash', tokenHash);
-        await this.ctx.storage.setAlarm(Date.now() + sessionMs);
+        await this.ctx.storage.setAlarm(Date.now() + idleRoomMs);
       }
       return true;
     });
@@ -64,7 +63,7 @@ export class PhoneRoom extends DurableObject {
     if (existing.some(ws => ws.deserializeAttachment().role === auth.role)) this.closePair(existing, 4001, 'Reconnecting');
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
-    server.serializeAttachment({ role: auth.role, active: true, ready: false, bytes: 0, window: Date.now(), windowBytes: 0, messages: 0 });
+    server.serializeAttachment({ role: auth.role, active: true, ready: false, window: Date.now(), windowBytes: 0, messages: 0 });
     this.ctx.acceptWebSocket(server);
     const sockets = this.ctx.getWebSockets().filter(ws => ws.deserializeAttachment()?.active);
     if (sockets.length === 2) {
@@ -86,10 +85,10 @@ export class PhoneRoom extends DurableObject {
       this.closePair(sockets, 1008, 'Invalid relay frame'); return;
     }
     if (Date.now() - meta.window >= 1000) { meta.window = Date.now(); meta.windowBytes = 0; meta.messages = 0; }
-    meta.bytes += message.byteLength;
     meta.windowBytes += message.byteLength;
     meta.messages++;
-    if (meta.bytes > maxBytes || meta.windowBytes > 4 * 1024 * 1024 || meta.messages > 1024) {
+    // Bound bursts without disconnecting a healthy long-running mirror.
+    if (meta.windowBytes > 4 * 1024 * 1024 || meta.messages > 1024) {
       this.closePair(sockets, 1008, 'Relay quota reached'); return;
     }
     ws.serializeAttachment(meta);
@@ -115,7 +114,12 @@ export class PhoneRoom extends DurableObject {
     }
   }
   async alarm() {
-    this.closePair(this.ctx.getWebSockets(), 4001, 'Renewing session');
-    await this.ctx.storage.deleteAll();
+    await this.ctx.blockConcurrencyWhile(async () => {
+      if (this.ctx.getWebSockets().some(ws => ws.deserializeAttachment()?.active)) {
+        await this.ctx.storage.setAlarm(Date.now() + idleRoomMs);
+      } else {
+        await this.ctx.storage.deleteAll();
+      }
+    });
   }
 }
