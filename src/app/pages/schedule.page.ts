@@ -54,7 +54,25 @@ import type { ClassSession } from '../core/models';
       } @else {
         <div class="course-grid">
           @for (course of courseStats(); track course.id) {
-            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || 'Teacher unavailable' }}</p><div class="course-room"><span class="material-symbols-rounded">location_on</span>{{ course.room || 'Room TBA' }} @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</div><div class="counts"><div><strong>{{ course.total }}</strong><span>This week</span></div><div><strong>{{ course.done }}</strong><span>Completed</span></div><div><strong>{{ course.left }}</strong><span>Remaining</span></div></div></article>
+            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || 'Teacher unavailable' }}</p><div class="course-room"><span class="material-symbols-rounded">location_on</span>{{ course.room || 'Room TBA' }} @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</div><div class="counts">
+              @for (stat of course.details; track stat.kind) {
+                <div class="count-item" (mouseenter)="hoverCourseDetail(course.id, stat.kind)" (mouseleave)="clearCourseHover()" (focusin)="hoverCourseDetail(course.id, stat.kind)" (focusout)="clearCourseHover()">
+                  <button class="count-trigger" type="button" [attr.aria-expanded]="courseDetailOpen(course.id, stat.kind)" [attr.aria-controls]="courseDetailId(course.id, stat.kind)" (click)="toggleCourseDetail(course.id, stat.kind)" (keydown.escape)="closeCourseDetail()"><strong>{{ stat.sessions.length }}</strong><span>{{ stat.label }}</span></button>
+                  @if (courseDetailOpen(course.id, stat.kind)) {
+                    <div class="count-detail" [id]="courseDetailId(course.id, stat.kind)" role="region" [attr.aria-label]="stat.label + ' classes for ' + course.name" (mouseenter)="hoverCourseDetail(course.id, stat.kind)" (mouseleave)="clearCourseHover()">
+                      <strong>{{ stat.label }} classes</strong>
+                      @if (stat.sessions.length) {
+                        <ul>
+                          @for (session of stat.sessions; track session.id) {
+                            <li><span class="detail-date">{{ session.startsAt | date:'EEE, MMM d' }}</span><span>{{ session.startsAt | date:'HH:mm' }}–{{ session.endsAt | date:'HH:mm' }}</span><span>{{ session.room || 'Room TBA' }}</span></li>
+                          }
+                        </ul>
+                      } @else { <span class="detail-empty">No classes in this group.</span> }
+                    </div>
+                  }
+                </div>
+              }
+            </div></article>
           } @empty { <div class="surface empty-state">No courses are available.</div> }
         </div>
       }
@@ -67,9 +85,10 @@ import type { ClassSession } from '../core/models';
     .session-list { overflow: hidden; } .session-row { min-height: 84px; padding: 14px 18px; display: grid; grid-template-columns: 62px 4px minmax(0,1fr) auto; align-items: center; gap: 16px; border-bottom: 1px solid var(--app-border); } .session-row:last-child { border: 0; }
     .session-time, .session-main { display: flex; flex-direction: column; gap: 4px; } .session-time { font-variant-numeric: tabular-nums; } .session-time span, .session-main span { color: var(--app-muted); font-size: 13px; } .color-bar { width: 4px; height: 48px; border-radius: 2px; background: var(--app-accent); }
     .session-main strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .room, .course-room { display: flex; align-items: center; gap: 5px; color: var(--app-muted); font-size: 13px; } .room .material-symbols-rounded, .course-room .material-symbols-rounded { font-size: 18px; }
-    .course-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; } .course-card { padding: 20px; min-width: 0; } .course-icon { width: 42px; height: 42px; display: grid; place-items: center; background: var(--app-accent-soft); color: var(--app-accent); border-radius: 8px; font-weight: 700; }
+    .course-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; } .course-card { position: relative; padding: 20px; min-width: 0; overflow: visible; } .course-icon { width: 42px; height: 42px; display: grid; place-items: center; background: var(--app-accent-soft); color: var(--app-accent); border-radius: 8px; font-weight: 700; }
     .course-card h2 { margin: 18px 0 5px; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .course-card p { margin: 0 0 12px; color: var(--app-muted); font-size: 14px; }
-    .counts { display: grid; grid-template-columns: repeat(3,1fr); margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--app-border); } .counts div { display: flex; flex-direction: column; } .counts strong { font-size: 20px; } .counts span { color: var(--app-muted); font-size: 11px; }
+    .counts { position: relative; z-index: 3; display: grid; grid-template-columns: repeat(3,1fr); margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--app-border); } .count-item { position: relative; min-width: 0; } .count-trigger { display: flex; width: 100%; padding: 0; flex-direction: column; align-items: flex-start; gap: 2px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; } .count-trigger strong { font-size: 20px; } .count-trigger span { color: var(--app-muted); font-size: 11px; } .count-trigger:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; border-radius: 4px; }
+    .count-detail { position: absolute; z-index: 5; top: calc(100% + 10px); left: 50%; width: min(300px, calc(100vw - 48px)); padding: 12px 14px; transform: translateX(-50%); border: 1px solid var(--app-border); border-radius: 10px; background: var(--app-surface-raised); box-shadow: 0 8px 24px rgba(23,32,35,.18); color: var(--app-text); font-size: 12px; text-align: left; } .count-item:last-child .count-detail { right: 0; left: auto; transform: none; } .count-detail strong { display: block; margin-bottom: 7px; font-size: 12px; } .count-detail ul { display: grid; gap: 7px; max-height: 180px; margin: 0; padding: 0; overflow: auto; list-style: none; } .count-detail li { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; padding-bottom: 6px; border-bottom: 1px solid var(--app-border); font-variant-numeric: tabular-nums; } .count-detail li:last-child { padding-bottom: 0; border-bottom: 0; } .count-detail li span:last-child { grid-column: 1 / -1; color: var(--app-muted); font-size: 11px; } .detail-date { color: var(--app-text); } .detail-empty { color: var(--app-muted); }
     .matrix-scroll { width: 100%; } .week-matrix { min-width: 1120px; display: grid; grid-template-columns: 76px repeat(5, minmax(200px, 1fr)); grid-template-rows: 62px auto; }
     .matrix-corner, .matrix-header { position: sticky; top: 0; z-index: 4; background: var(--app-surface-raised); border-bottom: 1px solid var(--app-border); } .matrix-corner { left: 0; z-index: 5; border-right: 1px solid var(--app-border); } .matrix-header { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; border-right: 1px solid var(--app-border); } .matrix-header strong { font-size: 13px; } .matrix-header span { color: var(--app-muted); font-size: 11px; }
     .time-column { position: sticky; left: 0; z-index: 3; background: var(--app-surface); border-right: 1px solid var(--app-border); } .time-column time { position: absolute; right: 10px; color: var(--app-muted); font-size: 11px; font-variant-numeric: tabular-nums; transform: translateY(-7px); } .time-column time:first-child { transform: translateY(4px); }
@@ -82,13 +101,15 @@ import type { ClassSession } from '../core/models';
     .matrix-session:focus-visible { outline: 2px solid color-mix(in srgb, var(--app-accent) 72%, #000); outline-offset: 1px; }
     .matrix-session:hover .session-details > span, .matrix-session:focus .session-details > span { display: block; }
     .session-room .material-symbols-rounded { width: 12px; height: 12px; margin-right: 2px; font-size: 12px; vertical-align: -2px; }
-    @media (max-width: 650px) { .course-grid { grid-template-columns: 1fr; } .session-row { padding: 12px; grid-template-columns: 52px 3px minmax(0,1fr); gap: 10px; } .room { grid-column: 3; } .day-heading div { display: block; } .day-heading div span { margin-left: 8px; } .layout-row { align-items: flex-start; flex-direction: column; } .layout-row mat-button-toggle-group { width: 100%; } .layout-row mat-button-toggle { flex: 1; } }
+    @media (max-width: 650px) { .course-grid { grid-template-columns: 1fr; } .session-row { padding: 12px; grid-template-columns: 52px 3px minmax(0,1fr); gap: 10px; } .room { grid-column: 3; } .day-heading div { display: block; } .day-heading div span { margin-left: 8px; } .layout-row { align-items: flex-start; flex-direction: column; } .layout-row mat-button-toggle-group { width: 100%; } .layout-row mat-button-toggle { flex: 1; } .count-detail { position: fixed; top: auto; right: 16px; bottom: 16px; left: 16px; width: auto; transform: none; } .count-item:last-child .count-detail { right: 16px; left: 16px; transform: none; } }
   `,
 })
 export class SchedulePage {
   readonly store = inject(LocalStore);
   readonly view = signal<'week' | 'courses'>('week');
   readonly layout = signal<'agenda' | 'grid'>('agenda');
+  readonly hoveredCourseDetail = signal<string | null>(null);
+  readonly selectedCourseDetail = signal<string | null>(null);
   private readonly pixelsPerMinute = 1.75;
   readonly days = computed(() => {
     const groups = new Map<string, ClassSession[]>();
@@ -102,10 +123,34 @@ export class SchedulePage {
     const courses = this.store.schedule().courses.length ? this.store.schedule().courses : [...new Set(sessions.map((s) => s.courseName))].map((name, i) => ({ id: `fallback-${i}`, name, sectionNumber: '', teacher: '', room: '', meetingPattern: '' }));
     return courses.map((course) => {
       const own = sessions.filter((s) => s.courseId === course.id || s.courseName.toLowerCase() === course.name.toLowerCase());
-      const done = own.filter((s) => new Date(s.endsAt).getTime() <= now).length;
-      return { ...course, total: own.length, done, left: own.length - done };
+      const completed = own.filter((s) => new Date(s.endsAt).getTime() <= now);
+      const remaining = own.filter((s) => new Date(s.endsAt).getTime() > now);
+      return {
+        ...course,
+        total: own.length,
+        done: completed.length,
+        left: remaining.length,
+        details: [
+          { kind: 'week' as const, label: 'This week', sessions: own },
+          { kind: 'completed' as const, label: 'Completed', sessions: completed },
+          { kind: 'remaining' as const, label: 'Remaining', sessions: remaining },
+        ],
+      };
     });
   });
+  courseDetailKey(courseId: string, kind: string): string { return `${courseId}:${kind}`; }
+  courseDetailId(courseId: string, kind: string): string { return `course-detail-${this.courseDetailKey(courseId, kind).replace(/[^a-zA-Z0-9_-]/g, '-')}`; }
+  courseDetailOpen(courseId: string, kind: string): boolean {
+    const key = this.courseDetailKey(courseId, kind);
+    return this.hoveredCourseDetail() === key || this.selectedCourseDetail() === key;
+  }
+  hoverCourseDetail(courseId: string, kind: string): void { this.hoveredCourseDetail.set(this.courseDetailKey(courseId, kind)); }
+  clearCourseHover(): void { this.hoveredCourseDetail.set(null); }
+  toggleCourseDetail(courseId: string, kind: string): void {
+    const key = this.courseDetailKey(courseId, kind);
+    this.selectedCourseDetail.update((current) => current === key ? null : key);
+  }
+  closeCourseDetail(): void { this.selectedCourseDetail.set(null); this.hoveredCourseDetail.set(null); }
   readonly matrixDays = computed(() => {
     const sessions = [...this.store.schedule().sessions].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
     const anchor = sessions[0] ? new Date(sessions[0].startsAt) : new Date();
