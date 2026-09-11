@@ -131,7 +131,7 @@ import { buildingFromRoom } from '../shared/campus-map.component';
     h2 { margin: 50px 0 8px; font-size: clamp(30px, 5vw, 48px); line-height: 1.08; font-weight: 600; }
     .time-range { opacity: .84; font-size: 18px; }
     .facts { gap: 24px; margin: 26px 0 34px; flex-wrap: wrap; } .facts span { display: inline-flex; align-items: center; gap: 7px; } .facts .material-symbols-rounded { font-size: 20px; }
-    .room-link { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .room-link { cursor: pointer; } .room-link:hover { color: color-mix(in srgb, var(--app-on-accent) 78%, transparent); } .room-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 3px; }
     mat-progress-bar { --mdc-linear-progress-active-indicator-color: var(--app-on-accent); --mdc-linear-progress-track-color: color-mix(in srgb, var(--app-on-accent) 25%, transparent); }
     .card-bottom { margin-top: 13px; gap: 12px; font-size: 13px; } .card-bottom strong { font-size: 18px; }
     .next-line { min-height: 54px; margin-top: auto; padding-top: 20px; gap: 12px; border-top: 1px solid color-mix(in srgb, var(--app-on-accent) 22%, transparent); } .next-line span:first-child { opacity: .72; } .next-line strong { flex: 1; }
