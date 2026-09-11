@@ -1,7 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
-import { Router, RouterLink } from '@angular/router';
+import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -21,7 +21,6 @@ import { todoDeadlineProgress } from '../core/models';
 import type { ClassSession, TodoItem } from '../core/models';
 import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dialog.component';
 import type { TaskDialogResult } from '../shared/text-dialog.component';
-import { buildingFromRoom } from '../shared/campus-map.component';
 
 @Component({
   selector: 'app-home-page',
@@ -35,7 +34,7 @@ import { buildingFromRoom } from '../shared/campus-map.component';
         @if (featured(); as session) {
           <h2>{{ session.courseName }}</h2>
           <div class="time-range">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</div>
-          <div class="facts"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher unavailable' }}</span>@if (session.room) { <span class="room-link" role="link" tabindex="0" (click)="openMap($event, session.room)" (keydown.enter)="openMap($event, session.room)" (keydown.space)="openMap($event, session.room)"><span class="material-symbols-rounded">location_on</span>{{ session.room }}</span> } @else { <span><span class="material-symbols-rounded">location_on</span>Room unavailable</span> }</div>
+          <div class="facts"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher unavailable' }}</span><span><span class="material-symbols-rounded">location_on</span>{{ session.room || 'Room unavailable' }}</span></div>
           <mat-progress-bar mode="determinate" [value]="progress()" />
           <div class="card-bottom"><strong>{{ countdown() }}</strong><span>{{ duration(session) }} min class</span></div>
           @if (nextAfterFeatured(); as next) { <div class="next-line"><span>Next</span><strong>{{ next.courseName }}</strong><span>{{ next.startsAt | date:'HH:mm' }}</span></div> }
@@ -131,7 +130,6 @@ import { buildingFromRoom } from '../shared/campus-map.component';
     h2 { margin: 50px 0 8px; font-size: clamp(30px, 5vw, 48px); line-height: 1.08; font-weight: 600; }
     .time-range { opacity: .84; font-size: 18px; }
     .facts { gap: 24px; margin: 26px 0 34px; flex-wrap: wrap; } .facts span { display: inline-flex; align-items: center; gap: 7px; } .facts .material-symbols-rounded { font-size: 20px; }
-    .room-link { cursor: pointer; } .room-link:hover { color: color-mix(in srgb, var(--app-on-accent) 78%, transparent); } .room-link:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; border-radius: 3px; }
     mat-progress-bar { --mdc-linear-progress-active-indicator-color: var(--app-on-accent); --mdc-linear-progress-track-color: color-mix(in srgb, var(--app-on-accent) 25%, transparent); }
     .card-bottom { margin-top: 13px; gap: 12px; font-size: 13px; } .card-bottom strong { font-size: 18px; }
     .next-line { min-height: 54px; margin-top: auto; padding-top: 20px; gap: 12px; border-top: 1px solid color-mix(in srgb, var(--app-on-accent) 22%, transparent); } .next-line span:first-child { opacity: .72; } .next-line strong { flex: 1; }
@@ -164,7 +162,6 @@ import { buildingFromRoom } from '../shared/campus-map.component';
 export class HomePage {
   readonly store = inject(LocalStore);
   readonly clock = inject(ClockService);
-  private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
   private readonly snack = inject(MatSnackBar);
   readonly expandedTodoId = signal<string | null>(null);
@@ -194,11 +191,6 @@ export class HomePage {
     return this.current() ? `${mins} min left` : `Starts in ${mins} min`;
   });
   duration(session: ClassSession): number { return Math.round((new Date(session.endsAt).getTime() - new Date(session.startsAt).getTime()) / 60_000); }
-  openMap(event: Event, room: string | null | undefined): void {
-    event.preventDefault(); event.stopPropagation();
-    const building = buildingFromRoom(room);
-    if (building) void this.router.navigate(['/tools/map'], { queryParams: { building } });
-  }
   timelineColor(index: number): string { return this.timelineColors[index % this.timelineColors.length]; }
   reorderTodos(event: CdkDragDrop<TodoItem[]>): void { this.store.reorderTodos(event.previousIndex, event.currentIndex); }
   changeTimelineZoom(delta: number, scroll: HTMLElement): void {
