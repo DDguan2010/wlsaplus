@@ -11,6 +11,7 @@ import { ToolsPage } from './pages/tools.page';
 import { TranslatorPage } from './pages/translator.page';
 import { VpnPage } from './pages/vpn.page';
 import { PhonePage } from './pages/phone.page';
+import { MapPage } from './pages/map.page';
 import { PlatformService } from './core/platform.service';
 
 const windowsPhoneControlOnly = () => inject(PlatformService).info.supportsPhoneControl;
@@ -26,6 +27,7 @@ export const routes: Routes = [
       { path: 'tools/vpn', component: VpnPage },
       { path: 'tools/translate', component: TranslatorPage },
       { path: 'tools/phone', component: PhonePage, canMatch: [windowsPhoneControlOnly] },
+      { path: 'tools/map', component: MapPage },
       { path: 'tools', component: ToolsPage },
       { path: 'settings', component: SettingsPage },
     ],

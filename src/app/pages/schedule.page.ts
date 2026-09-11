@@ -1,8 +1,10 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DatePipe } from '@angular/common';
+import { Router } from '@angular/router';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { LocalStore } from '../core/local-store.service';
 import type { ClassSession } from '../core/models';
+import { buildingFromRoom } from '../shared/campus-map.component';
 
 @Component({
   selector: 'app-schedule-page',
@@ -19,7 +21,7 @@ import type { ClassSession } from '../core/models';
               <section class="day-section"><div class="day-heading"><div><strong>{{ day.date | date:'EEEE' }}</strong><span>{{ day.date | date:'MMMM d' }}</span></div><span>{{ day.sessions.length }} classes</span></div>
                 <div class="session-list surface">
                   @for (session of day.sessions; track session.id) {
-                    <div class="session-row"><div class="session-time"><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></div><span class="color-bar"></span><div class="session-main"><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher unavailable' }}</span></div><div class="room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</div></div>
+                    <div class="session-row"><div class="session-time"><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></div><span class="color-bar"></span><div class="session-main"><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher unavailable' }}</span></div>@if (session.room) { <span class="room room-link" role="link" tabindex="0" (click)="openMap($event, session.room)" (keydown.enter)="openMap($event, session.room)" (keydown.space)="openMap($event, session.room)"><span class="material-symbols-rounded">location_on</span>{{ session.room }}</span> } @else { <span class="room"><span class="material-symbols-rounded">location_on</span>TBA</span> }</div>
                   }
                 </div>
               </section>
@@ -42,7 +44,7 @@ import type { ClassSession } from '../core/models';
                       <div class="session-details">
                         <span class="session-time">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</span>
                         <span class="session-teacher">{{ session.teacher || 'Teacher TBA' }}</span>
-                        <span class="session-room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</span>
+                        @if (session.room) { <span class="session-room room-link" role="link" tabindex="0" (click)="openMap($event, session.room)" (keydown.enter)="openMap($event, session.room)" (keydown.space)="openMap($event, session.room)"><span class="material-symbols-rounded">location_on</span>{{ session.room }}</span> } @else { <span class="session-room"><span class="material-symbols-rounded">location_on</span>TBA</span> }
                       </div>
                     </article>
                   }
@@ -54,7 +56,7 @@ import type { ClassSession } from '../core/models';
       } @else {
         <div class="course-grid">
           @for (course of courseStats(); track course.id) {
-            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || 'Teacher unavailable' }}</p><div class="course-room"><span class="material-symbols-rounded">location_on</span>{{ course.room || 'Room TBA' }} @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</div><div class="counts">
+            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || 'Teacher unavailable' }}</p>@if (course.room) { <span class="course-room room-link" role="link" tabindex="0" (click)="openMap($event, course.room)" (keydown.enter)="openMap($event, course.room)" (keydown.space)="openMap($event, course.room)"><span class="material-symbols-rounded">location_on</span>{{ course.room }} @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</span> } @else { <span class="course-room"><span class="material-symbols-rounded">location_on</span>Room TBA</span> }<div class="counts">
               @for (stat of course.details; track stat.kind) {
                 <div class="count-item" (mouseenter)="hoverCourseDetail(course.id, stat.kind)" (mouseleave)="clearCourseHover()" (focusin)="hoverCourseDetail(course.id, stat.kind)" (focusout)="clearCourseHover()">
                   <button class="count-trigger" type="button" [attr.aria-expanded]="courseDetailOpen(course.id, stat.kind)" [attr.aria-controls]="courseDetailId(course.id, stat.kind)" (click)="toggleCourseDetail(course.id, stat.kind)" (keydown.escape)="closeCourseDetail()"><strong>{{ stat.sessions.length }}</strong><span>{{ stat.label }}</span></button>
@@ -64,7 +66,7 @@ import type { ClassSession } from '../core/models';
                       @if (stat.sessions.length) {
                         <ul>
                           @for (session of stat.sessions; track session.id) {
-                            <li><span class="detail-date">{{ session.startsAt | date:'EEE, MMM d' }}</span><span>{{ session.startsAt | date:'HH:mm' }}–{{ session.endsAt | date:'HH:mm' }}</span><span>{{ session.room || 'Room TBA' }}</span></li>
+                            <li><span class="detail-date">{{ session.startsAt | date:'EEE, MMM d' }}</span><span>{{ session.startsAt | date:'HH:mm' }}–{{ session.endsAt | date:'HH:mm' }}</span>@if (session.room) { <span class="room-link" role="link" tabindex="0" (click)="openMap($event, session.room)" (keydown.enter)="openMap($event, session.room)" (keydown.space)="openMap($event, session.room)">{{ session.room }}</span> } @else { <span>Room TBA</span> }</li>
                           }
                         </ul>
                       } @else { <span class="detail-empty">No classes in this group.</span> }
@@ -84,7 +86,7 @@ import type { ClassSession } from '../core/models';
     .day-section { margin-bottom: 28px; } .day-heading { display: flex; justify-content: space-between; align-items: end; margin: 0 2px 10px; color: var(--app-muted); font-size: 13px; } .day-heading div { display: flex; gap: 10px; align-items: baseline; } .day-heading strong { color: var(--app-text); font-size: 18px; }
     .session-list { overflow: hidden; } .session-row { min-height: 84px; padding: 14px 18px; display: grid; grid-template-columns: 62px 4px minmax(0,1fr) auto; align-items: center; gap: 16px; border-bottom: 1px solid var(--app-border); } .session-row:last-child { border: 0; }
     .session-time, .session-main { display: flex; flex-direction: column; gap: 4px; } .session-time { font-variant-numeric: tabular-nums; } .session-time span, .session-main span { color: var(--app-muted); font-size: 13px; } .color-bar { width: 4px; height: 48px; border-radius: 2px; background: var(--app-accent); }
-    .session-main strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .room, .course-room { display: flex; align-items: center; gap: 5px; color: var(--app-muted); font-size: 13px; } .room .material-symbols-rounded, .course-room .material-symbols-rounded { font-size: 18px; }
+    .session-main strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .room, .course-room { display: flex; align-items: center; gap: 5px; color: var(--app-muted); font-size: 13px; } .room .material-symbols-rounded, .course-room .material-symbols-rounded { font-size: 18px; } .room-link { cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
     .course-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; } .course-card { position: relative; padding: 20px; min-width: 0; overflow: visible; } .course-icon { width: 42px; height: 42px; display: grid; place-items: center; background: var(--app-accent-soft); color: var(--app-accent); border-radius: 8px; font-weight: 700; }
     .course-card h2 { margin: 18px 0 5px; font-size: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; } .course-card p { margin: 0 0 12px; color: var(--app-muted); font-size: 14px; }
     .counts { position: relative; z-index: 3; display: grid; grid-template-columns: repeat(3,1fr); margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--app-border); } .count-item { position: relative; min-width: 0; } .count-trigger { display: flex; width: 100%; padding: 0; flex-direction: column; align-items: flex-start; gap: 2px; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; } .count-trigger strong { font-size: 20px; } .count-trigger span { color: var(--app-muted); font-size: 11px; } .count-trigger:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; border-radius: 4px; }
@@ -106,6 +108,7 @@ import type { ClassSession } from '../core/models';
 })
 export class SchedulePage {
   readonly store = inject(LocalStore);
+  private readonly router = inject(Router);
   readonly view = signal<'week' | 'courses'>('week');
   readonly layout = signal<'agenda' | 'grid'>('agenda');
   readonly hoveredCourseDetail = signal<string | null>(null);
@@ -186,4 +189,9 @@ export class SchedulePage {
   private timeText(value: string): string { const date = new Date(value); return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`; }
   private localDateKey(date: Date): string { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; }
   initials(name: string): string { return name.split(/[\s_]+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase(); }
+  openMap(event: Event, room: string | null | undefined): void {
+    event.preventDefault(); event.stopPropagation();
+    const building = buildingFromRoom(room);
+    if (building) void this.router.navigate(['/tools/map'], { queryParams: { building } });
+  }
 }
