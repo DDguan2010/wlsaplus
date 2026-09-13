@@ -26,11 +26,13 @@ import { NoticeService } from '../core/notice.service';
       </aside>
       <main><router-outlet /></main>
       @if (notice.notice() && !notice.dismissed()) {
-        <aside class="notice-alert" aria-live="polite">
-          <span class="notice-icon material-symbols-rounded">campaign</span>
-          <div class="notice-copy"><strong>{{ notice.notice()?.title }}</strong><span>{{ notice.notice()?.content }}</span></div>
-          <button mat-button type="button" (click)="notice.dismiss()" aria-label="Dismiss notice">Dismiss</button>
-        </aside>
+        <div class="notice-overlay">
+          <aside class="notice-alert" role="alertdialog" aria-modal="true" aria-live="polite">
+            <span class="notice-icon material-symbols-rounded">campaign</span>
+            <div class="notice-copy"><strong>{{ notice.notice()?.title }}</strong><span>{{ notice.notice()?.content }}</span></div>
+            <button mat-flat-button type="button" (click)="notice.dismiss()" aria-label="Dismiss notice">Got it</button>
+          </aside>
+        </div>
       }
       @if (updater.actionable()) {
         <aside class="update-alert" aria-live="polite">
@@ -69,9 +71,11 @@ import { NoticeService } from '../core/notice.service';
     nav a.active { color: var(--app-accent); background: var(--app-accent-soft); }
     main { margin-left: 88px; }
     .bottom-nav { display: none; }
-    .notice-alert { position: fixed; right: 22px; top: 22px; z-index: 39; width: min(460px, calc(100vw - 132px)); display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 12px; padding: 14px 16px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 8px; box-shadow: 0 10px 30px rgb(0 0 0 / 16%); }
-    .notice-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 8px; background: var(--app-accent-soft); color: var(--app-accent); font-size: 23px; }
-    .notice-copy { min-width: 0; display: grid; gap: 4px; } .notice-copy strong { font-size: 14px; } .notice-copy span { color: var(--app-muted); font-size: 12px; line-height: 1.35; }
+    .notice-overlay { position: fixed; inset: 0; z-index: 39; display: grid; place-items: center; padding: 24px; background: rgb(0 0 0 / 32%); }
+    .notice-alert { width: min(520px, 100%); display: grid; grid-template-columns: 56px minmax(0,1fr); align-items: start; gap: 16px; padding: 28px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 14px; box-shadow: 0 24px 70px rgb(0 0 0 / 28%); }
+    .notice-icon { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 12px; background: var(--app-accent-soft); color: var(--app-accent); font-size: 30px; }
+    .notice-copy { min-width: 0; display: grid; gap: 8px; padding-top: 2px; } .notice-copy strong { font-size: 19px; line-height: 1.25; } .notice-copy span { color: var(--app-muted); font-size: 14px; line-height: 1.55; }
+    .notice-alert button { grid-column: 2; justify-self: start; min-width: 100px; margin-top: 4px; }
     .update-alert { position: fixed; right: 22px; bottom: 22px; z-index: 40; width: min(430px, calc(100vw - 132px)); min-height: 86px; display: grid; grid-template-columns: 42px minmax(0,1fr) auto; align-items: center; gap: 14px; padding: 16px; background: var(--app-surface); border: 1px solid var(--app-border); border-radius: 8px; box-shadow: 0 10px 30px rgb(0 0 0 / 16%); }
     .update-icon { width: 42px; height: 42px; border-radius: 8px; background: var(--app-accent-soft); color: var(--app-accent); font-size: 25px; }
     .update-copy { min-width: 0; display: grid; gap: 4px; } .update-copy strong { font-size: 14px; } .update-copy > span { color: var(--app-muted); font-size: 12px; line-height: 1.35; }
@@ -82,7 +86,7 @@ import { NoticeService } from '../core/notice.service';
       .bottom-nav { position: fixed; display: grid; grid-template-columns: repeat(5, 1fr); inset: auto 0 0; z-index: 20; min-height: 72px; padding: 4px max(8px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); background: color-mix(in srgb, var(--app-surface) 94%, transparent); border-top: 1px solid var(--app-border); backdrop-filter: blur(18px); }
       .bottom-nav a { min-height: 62px; }
       .update-alert { right: 12px; bottom: 84px; width: calc(100vw - 24px); grid-template-columns: 38px minmax(0,1fr); } .update-alert button { grid-column: 2; justify-self: start; }
-      .notice-alert { right: 12px; top: 12px; width: calc(100vw - 24px); }
+      .notice-overlay { padding: 16px; } .notice-alert { padding: 22px; } .notice-alert button { grid-column: 1 / -1; }
     }
   `,
 })
