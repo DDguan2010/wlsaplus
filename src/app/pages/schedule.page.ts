@@ -3,10 +3,11 @@ import { DatePipe } from '@angular/common';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { LocalStore } from '../core/local-store.service';
 import type { ClassSession } from '../core/models';
+import { RoomMapDirective } from '../shared/room-map.directive';
 
 @Component({
   selector: 'app-schedule-page',
-  imports: [DatePipe, MatButtonToggleModule],
+  imports: [DatePipe, MatButtonToggleModule, RoomMapDirective],
   template: `
     <div class="page">
       <header class="page-header"><h1 class="page-title">Schedule</h1><span class="sync-label">Updated {{ store.schedule().syncedAt | date:'MMM d, HH:mm' }}</span></header>
@@ -19,7 +20,7 @@ import type { ClassSession } from '../core/models';
               <section class="day-section"><div class="day-heading"><div><strong>{{ day.date | date:'EEEE' }}</strong><span>{{ day.date | date:'MMMM d' }}</span></div><span>{{ day.sessions.length }} classes</span></div>
                 <div class="session-list surface">
                   @for (session of day.sessions; track session.id) {
-                    <div class="session-row"><div class="session-time"><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></div><span class="color-bar"></span><div class="session-main"><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher unavailable' }}</span></div><div class="room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</div></div>
+                    <div class="session-row"><div class="session-time"><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></div><span class="color-bar"></span><div class="session-main"><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher unavailable' }}</span></div><div class="room"><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</button></div></div>
                   }
                 </div>
               </section>
@@ -42,7 +43,7 @@ import type { ClassSession } from '../core/models';
                       <div class="session-details">
                         <span class="session-time">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</span>
                         <span class="session-teacher">{{ session.teacher || 'Teacher TBA' }}</span>
-                        <span class="session-room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</span>
+                        <span class="session-room"><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</button></span>
                       </div>
                     </article>
                   }
@@ -54,7 +55,7 @@ import type { ClassSession } from '../core/models';
       } @else {
         <div class="course-grid">
           @for (course of courseStats(); track course.id) {
-            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || 'Teacher unavailable' }}</p><div class="course-room"><span class="material-symbols-rounded">location_on</span>{{ course.room || 'Room TBA' }} @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</div><div class="counts">
+            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || 'Teacher unavailable' }}</p><div class="course-room"><button [appRoomMap]="course.room"><span class="material-symbols-rounded">location_on</span>{{ course.room || 'Room TBA' }}</button> @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</div><div class="counts">
               @for (stat of course.details; track stat.kind) {
                 <div class="count-item" (mouseenter)="hoverCourseDetail(course.id, stat.kind)" (mouseleave)="clearCourseHover()" (focusin)="hoverCourseDetail(course.id, stat.kind)" (focusout)="clearCourseHover()">
                   <button class="count-trigger" type="button" [attr.aria-expanded]="courseDetailOpen(course.id, stat.kind)" [attr.aria-controls]="courseDetailId(course.id, stat.kind)" (click)="toggleCourseDetail(course.id, stat.kind)" (keydown.escape)="closeCourseDetail()"><strong>{{ stat.sessions.length }}</strong><span>{{ stat.label }}</span></button>
@@ -64,7 +65,7 @@ import type { ClassSession } from '../core/models';
                       @if (stat.sessions.length) {
                         <ul>
                           @for (session of stat.sessions; track session.id) {
-                            <li><span class="detail-date">{{ session.startsAt | date:'EEE, MMM d' }}</span><span>{{ session.startsAt | date:'HH:mm' }}–{{ session.endsAt | date:'HH:mm' }}</span><span>{{ session.room || 'Room TBA' }}</span></li>
+                            <li><span class="detail-date">{{ session.startsAt | date:'EEE, MMM d' }}</span><span>{{ session.startsAt | date:'HH:mm' }}–{{ session.endsAt | date:'HH:mm' }}</span><span><button [appRoomMap]="session.room">{{ session.room || 'Room TBA' }}</button></span></li>
                           }
                         </ul>
                       } @else { <span class="detail-empty">No classes in this group.</span> }
@@ -97,9 +98,9 @@ import type { ClassSession } from '../core/models';
     .matrix-session strong { display: block; min-height: 16px; overflow: hidden; font-size: 11px; line-height: 16px; text-overflow: ellipsis; white-space: nowrap; }
     .session-details { display: flex; flex-direction: column; gap: 1px; margin-top: 2px; } .session-details > span { display: none; min-height: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .matrix-session[data-density="medium"] .session-time, .matrix-session[data-density="full"] .session-details > span { display: block; }
-    .matrix-session:hover, .matrix-session:focus { z-index: 20; min-height: 76px; overflow: visible; box-shadow: 0 5px 18px rgba(23,32,35,.24); }
+    .matrix-session:hover, .matrix-session:focus-within { z-index: 20; min-height: 76px; overflow: visible; box-shadow: 0 5px 18px rgba(23,32,35,.24); }
     .matrix-session:focus-visible { outline: 2px solid color-mix(in srgb, var(--app-accent) 72%, #000); outline-offset: 1px; }
-    .matrix-session:hover .session-details > span, .matrix-session:focus .session-details > span { display: block; }
+    .matrix-session:hover .session-details > span, .matrix-session:focus-within .session-details > span { display: block; }
     .session-room .material-symbols-rounded { width: 12px; height: 12px; margin-right: 2px; font-size: 12px; vertical-align: -2px; }
     @media (max-width: 650px) { .course-grid { grid-template-columns: 1fr; } .session-row { padding: 12px; grid-template-columns: 52px 3px minmax(0,1fr); gap: 10px; } .room { grid-column: 3; } .day-heading div { display: block; } .day-heading div span { margin-left: 8px; } .layout-row { align-items: flex-start; flex-direction: column; } .layout-row mat-button-toggle-group { width: 100%; } .layout-row mat-button-toggle { flex: 1; } .count-detail, .count-item:first-child .count-detail, .count-item:last-child .count-detail { position: fixed; top: auto; right: 16px; bottom: 16px; left: 16px; width: auto; transform: none; } }
   `,

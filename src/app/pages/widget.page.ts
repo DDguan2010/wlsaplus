@@ -10,9 +10,10 @@ import { todoDeadlineProgress } from '../core/models';
 import type { TodoItem } from '../core/models';
 import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dialog.component';
 import type { TaskDialogResult } from '../shared/text-dialog.component';
+import { RoomMapDirective } from '../shared/room-map.directive';
 
 @Component({
-  selector: 'app-widget-page', imports: [DatePipe, CdkDrag, CdkDragHandle, CdkDropList, MatDialogModule, MatTooltipModule],
+  selector: 'app-widget-page', imports: [DatePipe, CdkDrag, CdkDragHandle, CdkDropList, MatDialogModule, MatTooltipModule, RoomMapDirective],
   template: `
     <main class="widget">
       <header><span class="widget-brand"><img src="icons/app-icon.svg" alt=""><strong>WLSAPlus</strong></span><span class="window-actions"><button (click)="closeAll()" aria-label="Close all desktop cards" matTooltip="Close all cards"><span class="material-symbols-rounded">select_window_off</span></button><button (click)="close()" aria-label="Close this desktop card" matTooltip="Close this card"><span class="material-symbols-rounded">close</span></button></span></header>
@@ -32,13 +33,13 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
           </div>
         } @else if (type() === 'today') {
           <div class="title-row"><div><div class="status">{{ clock.now() | date:'EEEE' }}</div><h1>Today's classes</h1></div><strong class="count">{{ today().length }}</strong></div>
-          @for (session of today(); track session.id) { <div class="row"><time><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></time><div><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher TBA' }} · {{ session.room || 'Room TBA' }}</span></div></div> } @empty { <p class="muted">No classes today.</p> }
+          @for (session of today(); track session.id) { <div class="row"><time><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></time><div><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher TBA' }} · <button [appRoomMap]="session.room">{{ session.room || 'Room TBA' }}</button></span></div></div> } @empty { <p class="muted">No classes today.</p> }
         } @else {
           <div class="status-line"><span class="status">{{ type() === 'next-class' ? 'UP NEXT' : current() ? 'IN CLASS' : 'UP NEXT' }}</span><time>{{ clock.now() | date:'EEE, MMM d · HH:mm' }}</time></div>
           @if (displayed(); as session) {
             <h1>{{ session.courseName }}</h1>
             <div class="time">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</div>
-            <div class="details"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher TBA' }}</span><span><span class="material-symbols-rounded">location_on</span>{{ session.room || 'Room TBA' }}</span></div>
+            <div class="details"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher TBA' }}</span><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'Room TBA' }}</button></div>
             <div class="progress"><span [style.width.%]="progress()"></span></div>
             <div class="metrics"><div><strong>{{ countdown() }}</strong><span>{{ current() === session ? 'remaining' : 'until start' }}</span></div><div><strong>{{ duration() }} min</strong><span>duration</span></div></div>
             @if (following(); as nextSession) { <div class="next"><span>After this</span><strong>{{ nextSession.courseName }}</strong><time>{{ nextSession.startsAt | date:'HH:mm' }}</time></div> }

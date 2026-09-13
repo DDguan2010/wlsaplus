@@ -21,27 +21,29 @@ import { todoDeadlineProgress } from '../core/models';
 import type { ClassSession, TodoItem } from '../core/models';
 import { ConfirmDialogComponent, TextDialogComponent } from '../shared/text-dialog.component';
 import type { TaskDialogResult } from '../shared/text-dialog.component';
+import { RoomMapDirective } from '../shared/room-map.directive';
 
 @Component({
   selector: 'app-home-page',
-  imports: [DatePipe, CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatDialogModule, MatProgressBarModule, MatSnackBarModule, MatTooltipModule],
+  imports: [DatePipe, CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatDialogModule, MatProgressBarModule, MatSnackBarModule, MatTooltipModule, RoomMapDirective],
   template: `
     <div class="page">
       <header class="page-header"><div><div class="eyebrow">{{ clock.now() | date:'EEEE, MMMM d' }}</div><h1 class="page-title">Overview</h1></div><a mat-icon-button class="header-icon-button" routerLink="/settings" aria-label="Open settings"><span class="material-symbols-rounded">settings</span></a></header>
 
-      <a class="class-card" routerLink="/schedule">
+      <section class="class-card">
+        <a class="class-card-link" routerLink="/schedule" aria-label="Open full schedule"></a>
         <div class="card-top"><span class="state-dot"></span><span class="state-label">{{ cardState().label }}</span><span class="spacer"></span><span class="time-now">{{ clock.now() | date:'HH:mm' }}</span></div>
         @if (featured(); as session) {
           <h2>{{ session.courseName }}</h2>
           <div class="time-range">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</div>
-          <div class="facts"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher unavailable' }}</span><span><span class="material-symbols-rounded">location_on</span>{{ session.room || 'Room unavailable' }}</span></div>
+          <div class="facts"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher unavailable' }}</span><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'Room unavailable' }}</button></div>
           <mat-progress-bar mode="determinate" [value]="progress()" />
           <div class="card-bottom"><strong>{{ countdown() }}</strong><span>{{ duration(session) }} min class</span></div>
           @if (nextAfterFeatured(); as next) { <div class="next-line"><span>Next</span><strong>{{ next.courseName }}</strong><span>{{ next.startsAt | date:'HH:mm' }}</span></div> }
         } @else {
           <div class="clear-state"><span class="material-symbols-rounded">event_available</span><h2>No more classes</h2><p>Your schedule is clear for now.</p></div>
         }
-      </a>
+      </section>
 
       <section class="timeline-section">
         <div class="section-heading timeline-heading">
@@ -122,6 +124,7 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
   `,
   styles: `
     .eyebrow { color: var(--app-muted); font-size: 13px; margin-bottom: 4px; }
+    .class-card { position: relative; } .class-card-link { position: absolute; inset: 0; border-radius: inherit; } .class-card-link:focus-visible { outline: 2px solid var(--app-on-accent); outline-offset: -6px; } .facts button { position: relative; z-index: 1; }
     .header-icon-button { width: 44px; height: 44px; padding: 0 !important; display: inline-grid !important; place-items: center; line-height: 0; } .header-icon-button .material-symbols-rounded { width: 24px; height: 24px; font-size: 24px; }
     .class-card { min-height: 390px; display: flex; flex-direction: column; padding: 28px; border-radius: 8px; background: var(--app-accent); color: var(--app-on-accent); text-decoration: none; overflow: hidden; }
     .card-top, .facts, .card-bottom, .next-line { display: flex; align-items: center; }

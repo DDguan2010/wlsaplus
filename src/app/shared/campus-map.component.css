@@ -1,0 +1,29 @@
+:host { display: block; }
+:host([data-selected-building="1"]) [data-building="1"] .footprint,
+:host([data-selected-building="2"]) [data-building="2"] .footprint,
+:host([data-selected-building="3"]) [data-building="3"] .footprint,
+:host([data-selected-building="4"]) [data-building="4"] .footprint,
+:host([data-selected-building="5"]) [data-building="5"] .footprint,
+:host([data-selected-building="6"]) [data-building="6"] .footprint,
+:host([data-selected-building="7"]) [data-building="7"] .footprint,
+:host([data-selected-building="8"]) [data-building="8"] .footprint,
+:host([data-selected-building="9"]) [data-building="9"] .footprint,
+:host([data-selected-building="10"]) [data-building="10"] .footprint,
+:host([data-selected-building="11"]) [data-building="11"] .footprint,
+:host([data-selected-building="12"]) [data-building="12"] .footprint {
+  fill: #ffdf89; stroke: #a45b0d; stroke-width: 5;
+}
+:host([data-selected-building="1"]) [data-building="1"] .badge circle,
+:host([data-selected-building="2"]) [data-building="2"] .badge circle,
+:host([data-selected-building="3"]) [data-building="3"] .badge circle,
+:host([data-selected-building="4"]) [data-building="4"] .badge circle,
+:host([data-selected-building="5"]) [data-building="5"] .badge circle,
+:host([data-selected-building="6"]) [data-building="6"] .badge circle,
+:host([data-selected-building="7"]) [data-building="7"] .badge circle,
+:host([data-selected-building="8"]) [data-building="8"] .badge circle,
+:host([data-selected-building="9"]) [data-building="9"] .badge circle,
+:host([data-selected-building="10"]) [data-building="10"] .badge circle,
+:host([data-selected-building="11"]) [data-building="11"] .badge circle,
+:host([data-selected-building="12"]) [data-building="12"] .badge circle {
+  fill: #a45b0d; stroke: #fff8df; stroke-width: 3;
+}
