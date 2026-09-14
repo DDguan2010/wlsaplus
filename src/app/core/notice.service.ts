@@ -26,7 +26,7 @@ export class NoticeService {
   private async load(): Promise<void> {
     const cacheBust = Date.now();
     const sources = [
-      `https://wlsaplus.02studio.xyz/notice.json?ts=${cacheBust}`,
+      `https://wlsap.02studio.xyz/notice.json?ts=${cacheBust}`,
       `/notice.json?ts=${cacheBust}`,
     ];
     for (const url of sources) {
