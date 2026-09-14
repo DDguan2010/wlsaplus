@@ -1,6 +1,6 @@
 {
-  "id": "welcome-popout-2026-09-13",
-  "title": "Welcome to WLSAplus",
-  "content": "Welcome to WLSAplus. Keep your school day organized in one place.",
+  "id": "release-1.0.8-2026-09-14",
+  "title": "WLSAplus 1.0.8 is here",
+  "content": "Version 1.0.8 adds the Map tool and improves the VPN full-device tunnel. The new VPN relay is faster and costs a lot to operate. If WLSAplus helps you, you can support development: https://ifdian.net/a/02studio",
   "type": "info"
 }
