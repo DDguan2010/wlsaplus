@@ -46,9 +46,9 @@ declare global {
       };
       vpn: {
         status(): Promise<VpnStatus>;
-        connect(mode: VpnConnectionMode): Promise<VpnStatus>;
+        connect(mode: VpnConnectionMode, sourceId?: string): Promise<VpnStatus>;
         disconnect(): Promise<VpnStatus>;
-        restartElevated(mode: VpnConnectionMode): Promise<VpnStatus>;
+        restartElevated(mode: VpnConnectionMode, sourceId?: string): Promise<VpnStatus>;
         onStatus(callback: (status: VpnStatus) => void): () => void;
       };
       updater: {

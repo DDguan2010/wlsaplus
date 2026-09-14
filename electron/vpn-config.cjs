@@ -1,9 +1,9 @@
-const VPN_CONNECTION_MODES = new Set(['system-proxy', 'full-tunnel']);
+const VPN_CONNECTION_MODES = new Set(['full-tunnel']);
 
 function buildShadowsocksOutbound(profile) {
   const outbound = {
     type: 'shadowsocks',
-    tag: '02vpn',
+    tag: 'wlsaplus-relay',
     server: profile.server,
     server_port: profile.serverPort,
     method: profile.method,
@@ -23,7 +23,7 @@ function buildVpnConfig(profile, mode, proxyPort) {
     log: { level: 'warn', timestamp: true },
     inbounds: [mixedInbound],
     outbounds: [buildShadowsocksOutbound(profile)],
-    route: { auto_detect_interface: true, final: '02vpn' },
+    route: { auto_detect_interface: true, final: 'wlsaplus-relay' },
   };
 
   if (mode === 'full-tunnel') {
@@ -35,7 +35,7 @@ function buildVpnConfig(profile, mode, proxyPort) {
         server_port: 443,
         path: '/dns-query',
         tls: { enabled: true, server_name: 'cloudflare-dns.com' },
-        detour: '02vpn',
+        detour: 'wlsaplus-relay',
       }],
       final: 'tunnel-dns',
       strategy: 'ipv4_only',

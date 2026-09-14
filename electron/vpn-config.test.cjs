@@ -13,14 +13,6 @@ const PROFILE = {
   password: 'test-password',
 };
 
-test('system proxy mode only exposes the local mixed proxy', () => {
-  const config = buildVpnConfig(PROFILE, 'system-proxy', 17890);
-
-  assert.deepEqual(config.inbounds, [{ type: 'mixed', tag: 'local-proxy', listen: '127.0.0.1', listen_port: 17890 }]);
-  assert.equal(config.dns, undefined);
-  assert.equal(config.route.final, '02vpn');
-});
-
 test('full tunnel mode captures system routes and DNS', () => {
   const config = buildVpnConfig(PROFILE, 'full-tunnel', 17890);
   const tun = config.inbounds.find((inbound) => inbound.type === 'tun');
@@ -34,7 +26,7 @@ test('full tunnel mode captures system routes and DNS', () => {
     port: 53,
     action: 'hijack-dns',
   }]);
-  assert.equal(config.dns.servers[0].detour, '02vpn');
+  assert.equal(config.dns.servers[0].detour, 'wlsaplus-relay');
 });
 
 test('sing-box accepts the generated full tunnel configuration', { skip: process.platform !== 'win32' }, (context) => {

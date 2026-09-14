@@ -1,0 +1,8 @@
+name = "wlsaplus-vpn-subscription"
+main = "src/index.js"
+compatibility_date = "2026-09-14"
+workers_dev = false
+routes = [{ pattern = "vpnrelay.02studio.xyz", custom_domain = true }]
+
+[observability]
+enabled = false

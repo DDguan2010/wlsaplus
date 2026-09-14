@@ -208,13 +208,14 @@ export interface PhoneStatus {
 }
 
 export type VpnConnectionState = 'idle' | 'connecting' | 'connected' | 'disconnecting' | 'delegated' | 'error' | 'unavailable';
-export type VpnConnectionMode = 'system-proxy' | 'full-tunnel';
+export type VpnConnectionMode = 'full-tunnel';
 
 export interface VpnStatus {
   state: VpnConnectionState;
   message: string;
   connectedAt: string | null;
   mode: VpnConnectionMode | 'external-client' | 'unavailable';
+  sourceId?: string;
   requiresElevation?: boolean;
 }
 

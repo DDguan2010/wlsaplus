@@ -13,6 +13,8 @@ const { closeAllCards } = require('./card-manager.cjs');
 const { PhoneManager } = require('./phone-manager.cjs');
 const { PhoneNetwork } = require('./phone-network.cjs');
 const { validateExternalHelpUrl } = require('./external-links.cjs');
+const { getVpnSource, subscriptionUrl } = require('./vpn-sources.cjs');
+const yaml = require('js-yaml');
 
 function handleSquirrelEvent() {
   if (process.platform !== 'win32') return false;
@@ -58,11 +60,11 @@ let isQuitting = false;
 const isAutostart = process.argv.includes('--autostart');
 const prepareUpdateMode = process.argv.includes('--prepare-update');
 const vpnAutoConnectMode = process.argv.includes('--vpn-autoconnect=full-tunnel') ? 'full-tunnel' : null;
+const vpnAutoConnectSource = getVpnSource((process.argv.find((argument) => argument.startsWith('--vpn-source=')) || '').slice('--vpn-source='.length)).id;
 const VPN_PORT = 17890;
-const VPN_SUBSCRIPTION_URL = 'https://vpn.02studio.xyz/api/subscribe?format=ss';
 let vpnProcess = null;
 let vpnDisconnecting = false;
-let vpnStatus = { state: 'idle', message: 'Ready', connectedAt: null, mode: 'system-proxy' };
+let vpnStatus = { state: 'idle', message: 'Ready', connectedAt: null, mode: 'full-tunnel' };
 let vpnProcessError = '';
 let quitAfterCleanup = false;
 let updateInstallRequested = false;
@@ -146,7 +148,7 @@ function decodeBase64Url(value) {
 
 function parseShadowsocksUri(value) {
   const url = new URL(value.trim());
-  if (url.protocol !== 'ss:') throw new Error('02VPN returned an unsupported profile.');
+  if (url.protocol !== 'ss:') throw new Error('WLSAPlus relay returned an unsupported profile.');
   let method;
   let password;
   if (url.password) {
@@ -155,15 +157,34 @@ function parseShadowsocksUri(value) {
   } else {
     const credentials = decodeBase64Url(decodeURIComponent(url.username));
     const separator = credentials.indexOf(':');
-    if (separator < 1) throw new Error('02VPN returned an invalid profile.');
+    if (separator < 1) throw new Error('WLSAPlus relay returned an invalid profile.');
     method = credentials.slice(0, separator);
     password = credentials.slice(separator + 1);
   }
   const plugin = decodeURIComponent(url.searchParams.get('plugin') || '');
   const [pluginName, ...pluginOptions] = plugin.split(';').filter(Boolean);
-  if (pluginName && pluginName !== 'v2ray-plugin') throw new Error(`02VPN requires an unsupported plugin: ${pluginName}.`);
-  if (!url.hostname || !url.port || !method || !password) throw new Error('02VPN returned an incomplete profile.');
+  if (pluginName && pluginName !== 'v2ray-plugin') throw new Error(`WLSAPlus relay requires an unsupported plugin: ${pluginName}.`);
+  if (!url.hostname || !url.port || !method || !password) throw new Error('WLSAPlus relay returned an incomplete profile.');
   return { server: url.hostname, serverPort: Number(url.port), method, password, plugin: pluginName || undefined, pluginOptions: pluginOptions.join(';') || undefined };
+}
+
+function parseClashShadowsocksProfile(body) {
+  let document;
+  try { document = yaml.load(body); } catch { return null; }
+  const candidate = Array.isArray(document?.proxies)
+    ? document.proxies.find((proxy) => proxy?.type === 'ss' && proxy.server && proxy.port && proxy.cipher && proxy.password)
+    : null;
+  if (!candidate) return null;
+  const plugin = candidate.plugin ? String(candidate.plugin) : undefined;
+  if (plugin && plugin !== 'v2ray-plugin') throw new Error(`The subscription requires an unsupported plugin: ${plugin}.`);
+  return {
+    server: String(candidate.server),
+    serverPort: Number(candidate.port),
+    method: String(candidate.cipher),
+    password: String(candidate.password),
+    plugin,
+    pluginOptions: candidate['plugin-opts'] ? String(candidate['plugin-opts']) : undefined,
+  };
 }
 
 function isPublicIpv4(address) {
@@ -202,7 +223,7 @@ async function resolvePublicIpv4(hostname) {
       }
     } catch { /* Try the next direct encrypted resolver. */ }
   }
-  throw new Error('Could not resolve the 02VPN server outside the system DNS.');
+  throw new Error('Could not resolve the WLSAPlus relay server outside the system DNS.');
 }
 
 function secureGetByAddress(address, servername, requestPath, accept = 'text/plain') {
@@ -226,22 +247,24 @@ function secureGetByAddress(address, servername, requestPath, accept = 'text/pla
   });
 }
 
-async function fetchVpnProfile() {
-  const subscription = new URL(VPN_SUBSCRIPTION_URL);
+async function fetchVpnProfile(sourceId = 'relay') {
+  const subscription = subscriptionUrl(sourceId, 'ss');
   const addresses = await resolvePublicIpv4(subscription.hostname);
   let lastError;
   for (const address of addresses) {
     try {
       const response = await secureGetByAddress(address, subscription.hostname, `${subscription.pathname}${subscription.search}`);
-      if (response.status !== 200) throw new Error(`02VPN subscription returned ${response.status}.`);
+      if (response.status !== 200) throw new Error(`${getVpnSource(sourceId).name} subscription returned ${response.status}.`);
       const body = response.text.trim();
+      const clashProfile = parseClashShadowsocksProfile(body);
+      if (clashProfile) return clashProfile;
       const decoded = body.startsWith('ss://') ? body : decodeBase64Url(body);
       const profile = decoded.split(/\r?\n/).find((line) => line.startsWith('ss://'));
-      if (!profile) throw new Error('02VPN did not return a usable profile.');
+      if (!profile) throw new Error(`${getVpnSource(sourceId).name} did not return a usable Shadowsocks profile.`);
       return parseShadowsocksUri(profile);
     } catch (error) { lastError = error; }
   }
-  throw new Error(lastError?.message || 'Could not download the 02VPN subscription.');
+  throw new Error(lastError?.message || 'Could not download the WLSAPlus relay subscription.');
 }
 
 async function resolveVpnServer(profile) {
@@ -296,11 +319,13 @@ function quoteWindowsArgument(value) {
   return `"${text.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/g, '$1$1')}"`;
 }
 
-async function restartVpnElevated(mode) {
+async function restartVpnElevated(mode, sourceId = 'relay') {
   if (process.platform !== 'win32' || mode !== 'full-tunnel') throw new Error('Administrator restart is available for Windows full-device mode only.');
-  if (await isWindowsAdministrator()) return connectVpn(mode);
+  if (await isWindowsAdministrator()) return connectVpn(mode, sourceId);
 
-  const launchArguments = app.isPackaged ? ['--vpn-autoconnect=full-tunnel'] : [app.getAppPath(), '--vpn-autoconnect=full-tunnel'];
+  const launchArguments = app.isPackaged
+    ? ['--vpn-autoconnect=full-tunnel', `--vpn-source=${getVpnSource(sourceId).id}`]
+    : [app.getAppPath(), '--vpn-autoconnect=full-tunnel', `--vpn-source=${getVpnSource(sourceId).id}`];
   const argumentString = launchArguments.map(quoteWindowsArgument).join(' ');
   const script = `Start-Process -FilePath ${powershellLiteral(process.execPath)} -ArgumentList ${powershellLiteral(argumentString)} -Verb RunAs`;
   app.releaseSingleInstanceLock();
@@ -335,7 +360,7 @@ async function waitForFullTunnelInterface() {
   try {
     await execFileAsync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 15_000 });
   } catch {
-    throw new Error('02VPN could not finish creating the Windows full-device tunnel.');
+    throw new Error('WLSAPlus relay could not finish creating the Windows full-device tunnel.');
   }
 }
 
@@ -375,7 +400,7 @@ async function verifyVpnConnection(mode) {
         if (attempt < 2) await delay(800 * (attempt + 1));
       }
     }
-    throw new Error(`02VPN started, but ${mode === 'full-tunnel' ? 'tunneled DNS' : 'the proxy'} did not become ready. Please reconnect.`);
+    throw new Error(`WLSAPlus relay started, but ${mode === 'full-tunnel' ? 'tunneled DNS' : 'the proxy'} did not become ready. Please reconnect.`);
   } finally {
     await probeSession.setProxy({ mode: 'direct' }).catch(() => {});
     await probeSession.closeAllConnections().catch(() => {});
@@ -474,24 +499,26 @@ async function stopVpnProcess() {
 }
 
 function normalizeVpnMode(value) {
-  return VPN_CONNECTION_MODES.has(value) ? value : 'system-proxy';
+  return VPN_CONNECTION_MODES.has(value) ? value : 'full-tunnel';
 }
 
-async function connectVpn(requestedMode = 'system-proxy') {
+async function connectVpn(requestedMode = 'full-tunnel', requestedSource = 'relay') {
   const mode = normalizeVpnMode(requestedMode);
-  if (vpnProcess && vpnStatus.state === 'connected' && vpnStatus.mode === mode) return vpnStatus;
+  const sourceId = getVpnSource(requestedSource).id;
+  if (vpnProcess && vpnStatus.state === 'connected' && vpnStatus.mode === mode && vpnStatus.sourceId === sourceId) return vpnStatus;
   if (vpnProcess) await disconnectVpn();
   if (mode === 'full-tunnel' && process.platform !== 'win32') {
     return setVpnStatus({ state: 'error', message: 'Full-device mode is currently available on Windows only.', connectedAt: null, mode, requiresElevation: false });
   }
   if (mode === 'full-tunnel' && !(await isWindowsAdministrator())) {
-    return restartVpnElevated(mode);
+    return restartVpnElevated(mode, sourceId);
   }
-  setVpnStatus({ state: 'connecting', message: `Connecting 02VPN ${mode === 'full-tunnel' ? 'full-device tunnel' : 'web proxy'}...`, connectedAt: null, mode, requiresElevation: false });
+  const sourceName = getVpnSource(sourceId).name;
+  setVpnStatus({ state: 'connecting', message: `Connecting ${sourceName} ${mode === 'full-tunnel' ? 'full-device tunnel' : 'web proxy'}...`, connectedAt: null, mode, sourceId, requiresElevation: false });
   try {
     const core = vpnCorePath();
     await fs.access(core);
-    const profile = await resolveVpnServer(await fetchVpnProfile());
+    const profile = await resolveVpnServer(await fetchVpnProfile(sourceId));
     if (profile.plugin === 'v2ray-plugin') await fs.access(path.join(path.dirname(core), process.platform === 'win32' ? 'v2ray-plugin.exe' : 'v2ray-plugin'));
     await writeVpnConfig(profile, mode);
     await validateVpnConfig(core);
@@ -509,14 +536,14 @@ async function connectVpn(requestedMode = 'system-proxy') {
       vpnProcess = null;
       if (!vpnDisconnecting) {
         const detail = vpnProcessError.trim().split(/\r?\n/).at(-1);
-        void restoreSavedSystemProxy().finally(() => setVpnStatus({ state: 'error', message: detail || `02VPN stopped unexpectedly (${code ?? 'unknown'}).`, connectedAt: null, mode, requiresElevation: false }));
+        void restoreSavedSystemProxy().finally(() => setVpnStatus({ state: 'error', message: detail || `WLSAPlus relay stopped unexpectedly (${code ?? 'unknown'}).`, connectedAt: null, mode, requiresElevation: false }));
       }
     });
     await waitForPort(VPN_PORT);
     if (mode === 'full-tunnel') await waitForFullTunnelInterface();
     await verifyVpnConnection(mode);
     if (mode === 'system-proxy') await enableSystemProxy();
-    return setVpnStatus({ state: 'connected', message: mode === 'full-tunnel' ? 'Full device protected by 02VPN' : 'Web traffic protected by 02VPN', connectedAt: new Date().toISOString(), mode, requiresElevation: false });
+    return setVpnStatus({ state: 'connected', message: mode === 'full-tunnel' ? `Full device protected by ${sourceName}` : `Web traffic protected by ${sourceName}`, connectedAt: new Date().toISOString(), mode, sourceId, requiresElevation: false });
   } catch (error) {
     const processExited = !vpnProcess || vpnProcess.exitCode !== null;
     vpnDisconnecting = true;
@@ -524,8 +551,8 @@ async function connectVpn(requestedMode = 'system-proxy') {
     await restoreSavedSystemProxy().catch(() => {});
     const missingCore = error && (error.code === 'ENOENT' || error.code === 'EACCES');
     const processDetail = processExited ? vpnProcessError.trim().split(/\r?\n/).at(-1) : '';
-    const message = missingCore ? 'VPN core is missing. Run npm run vpn:core.' : (processDetail || (error instanceof Error ? error.message : 'Could not connect to 02VPN.'));
-    return setVpnStatus({ state: 'error', message, connectedAt: null, mode, requiresElevation: false });
+    const message = missingCore ? 'VPN core is missing. Run npm run vpn:core.' : (processDetail || (error instanceof Error ? error.message : `Could not connect to ${getVpnSource(sourceId).name}.`));
+    return setVpnStatus({ state: 'error', message, connectedAt: null, mode, sourceId, requiresElevation: false });
   }
 }
 
@@ -820,9 +847,9 @@ ipcMain.handle('cards:add', (_event, type) => {
 ipcMain.handle('cards:remove', (_event, id) => { cards.get(Number(id))?.close(); });
 ipcMain.handle('cards:close-all', () => closeAllCards(cards));
 ipcMain.handle('vpn:status', () => vpnStatus);
-ipcMain.handle('vpn:connect', (_event, mode) => connectVpn(mode));
+ipcMain.handle('vpn:connect', (_event, mode, sourceId) => connectVpn(mode, sourceId));
 ipcMain.handle('vpn:disconnect', () => disconnectVpn());
-ipcMain.handle('vpn:restart-elevated', (_event, mode) => restartVpnElevated(normalizeVpnMode(mode)));
+ipcMain.handle('vpn:restart-elevated', (_event, mode, sourceId) => restartVpnElevated(normalizeVpnMode(mode), sourceId));
 ipcMain.handle('updater:status', () => updateStatus);
 ipcMain.handle('updater:check', () => checkForAppUpdate());
 ipcMain.handle('updater:download', () => downloadAppUpdate());
@@ -877,7 +904,7 @@ app.whenReady().then(async () => {
     }
   }
   if (!isAutostart || cards.size === 0 || vpnAutoConnectMode) showMainWindow(vpnAutoConnectMode ? 'tools/vpn' : '');
-  if (vpnAutoConnectMode) void connectVpn(vpnAutoConnectMode);
+  if (vpnAutoConnectMode) void connectVpn(vpnAutoConnectMode, vpnAutoConnectSource);
   if (updatesSupported && !vpnAutoConnectMode) {
     const updateTimer = setTimeout(() => void checkForAppUpdate(), 8_000);
     updateTimer.unref();
