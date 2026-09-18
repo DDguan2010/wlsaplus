@@ -73,3 +73,7 @@ While recording:
 5. Wait for the browser to close automatically.
 
 The result is stored under `captures/powerschool-<timestamp>/`. This directory is ignored by Git.
+
+## License
+
+WLSAPlus is licensed under the [GNU General Public License v3.0](LICENSE). Bundled third-party components retain their own license notices.
