@@ -170,6 +170,7 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run version:apply
+      - run: npm run vpn:core
       - run: npm test
       - name: Import Apple signing certificate
         if: env.APPLE_CERTIFICATE_BASE64 != ''
