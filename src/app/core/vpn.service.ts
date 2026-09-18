@@ -33,7 +33,7 @@ export class VpnService {
           ...this.status(),
           state: 'error',
           message: error instanceof Error ? error.message : 'Could not request administrator access.',
-          requiresElevation: this.mode() === 'full-tunnel',
+          requiresElevation: this.platform.info.os === 'windows' && this.mode() === 'full-tunnel',
         });
       }
       return;

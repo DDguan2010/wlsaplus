@@ -12,7 +12,7 @@ import { VpnService } from '../core/vpn.service';
   template: `
     <div class="page tool-page">
       <header class="page-header"><a class="back icon-button" routerLink="/tools" aria-label="Back to tools"><span class="material-symbols-rounded">arrow_back</span></a><div><h1 class="page-title">VPN</h1><span>WLSAPlus relay</span></div><span class="spacer"></span><a mat-stroked-button class="guide-link" [href]="guideUrl" target="_blank" rel="noopener noreferrer" (click)="openGuide($event)"><span class="material-symbols-rounded">help</span>How to use</a></header>
-      @if (platform.info.kind === 'electron' && platform.info.os === 'windows') {
+      @if (platform.info.kind === 'electron' && (platform.info.os === 'windows' || platform.info.os === 'macos')) {
         <div class="mode-row"><span class="material-symbols-rounded">devices</span>Full device tunnel</div>
       }
       <section class="vpn-panel surface" [class.connected]="status().state === 'connected'">
@@ -23,7 +23,7 @@ import { VpnService } from '../core/vpn.service';
         @else if (status().requiresElevation) { <button mat-flat-button (click)="vpn.restartElevated()">Restart as administrator</button> }
         @else { <button mat-flat-button (click)="vpn.connect()" [disabled]="status().state === 'unavailable'">{{ platform.info.kind === 'android' ? 'Open VPN client' : 'Connect' }}</button> }
       </section>
-      @if (platform.info.os === 'windows') {
+      @if (platform.info.os === 'windows' || platform.info.os === 'macos') {
         <div class="facts"><span><span class="material-symbols-rounded">shield</span>Encrypted connection</span><span><span class="material-symbols-rounded">device_hub</span>TCP and UDP</span><span><span class="material-symbols-rounded">dns</span>Tunneled DNS</span></div>
       } @else {
         <div class="facts"><span><span class="material-symbols-rounded">shield</span>Encrypted connection</span><span><span class="material-symbols-rounded">public</span>VPN client</span><span><span class="material-symbols-rounded">sync</span>Automatic subscription</span></div>
