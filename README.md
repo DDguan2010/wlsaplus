@@ -15,7 +15,7 @@ The native app syncs on launch, when you press `Sync now`, and every 15 minutes 
 
 On Windows, desktop cards are frameless, always on top, hidden from the taskbar, and their positions are saved. Card launch at Windows startup is enabled by default and can be changed in Settings.
 
-The Windows VPN supports a low-permission web proxy and an administrator-enabled full-device mode. Full-device mode uses a strict sing-box TUN route for TCP, UDP, IPv4/IPv6, and tunneled DNS; the web proxy remains available as a compatibility fallback.
+The Windows and macOS apps provide an administrator-enabled full-device VPN. It uses a strict sing-box TUN route for TCP, UDP, IPv4/IPv6, and tunneled DNS. macOS requests administrator approval when starting or stopping the tunnel; no VPN profile or node credentials are bundled in the app.
 
 ```powershell
 npm test

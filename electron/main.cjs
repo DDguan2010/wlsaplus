@@ -14,6 +14,7 @@ const { PhoneManager } = require('./phone-manager.cjs');
 const { PhoneNetwork } = require('./phone-network.cjs');
 const { validateExternalHelpUrl } = require('./external-links.cjs');
 const { getVpnSource, subscriptionUrl } = require('./vpn-sources.cjs');
+const { buildMacVpnStartScript, buildMacVpnStopScript, privilegedAppleScript } = require('./mac-vpn.cjs');
 const yaml = require('js-yaml');
 
 function handleSquirrelEvent() {
@@ -63,6 +64,7 @@ const vpnAutoConnectMode = process.argv.includes('--vpn-autoconnect=full-tunnel'
 const vpnAutoConnectSource = getVpnSource((process.argv.find((argument) => argument.startsWith('--vpn-source=')) || '').slice('--vpn-source='.length)).id;
 const VPN_PORT = 17890;
 let vpnProcess = null;
+let macVpnRunning = false;
 let vpnDisconnecting = false;
 let vpnStatus = { state: 'idle', message: 'Ready', connectedAt: null, mode: 'full-tunnel' };
 let vpnProcessError = '';
@@ -105,6 +107,8 @@ const cardSettingsFile = () => path.join(app.getPath('userData'), 'desktop-card-
 const vpnDirectory = () => path.join(app.getPath('userData'), 'vpn');
 const vpnConfigFile = () => path.join(vpnDirectory(), 'config.json');
 const vpnProxyStateFile = () => path.join(vpnDirectory(), 'proxy-state.json');
+const macVpnPidFile = () => path.join(vpnDirectory(), 'sing-box.pid');
+const macVpnLogFile = () => path.join(vpnDirectory(), 'sing-box.log');
 const powerSchoolSession = () => session.fromPartition('persist:powerschool');
 const appSession = () => session.fromPartition('persist:wlsaplus');
 const iconPath = () => path.join(__dirname, '..', 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
@@ -339,6 +343,31 @@ async function restartVpnElevated(mode, sourceId = 'relay') {
   return setVpnStatus({ state: 'connecting', message: 'Restarting with administrator access...', connectedAt: null, mode, requiresElevation: false });
 }
 
+async function runMacVpnAdminScript(shellScript) {
+  try {
+    await execFileAsync('/usr/bin/osascript', ['-e', privilegedAppleScript(shellScript)], { timeout: 30_000 });
+  } catch (error) {
+    const detail = String(error?.stderr || error?.message || '');
+    if (/canceled|cancelled|-128/i.test(detail)) throw new Error('Administrator approval was cancelled.');
+    throw new Error('macOS could not start or stop the full-device tunnel.');
+  }
+}
+
+async function startMacVpn(core) {
+  await fs.mkdir(vpnDirectory(), { recursive: true });
+  const script = buildMacVpnStartScript({ core, config: vpnConfigFile(), pidFile: macVpnPidFile(), logFile: macVpnLogFile() });
+  await runMacVpnAdminScript(script);
+  macVpnRunning = true;
+}
+
+async function stopMacVpn() {
+  if (!macVpnRunning) {
+    try { await fs.access(macVpnPidFile()); } catch { return; }
+  }
+  await runMacVpnAdminScript(buildMacVpnStopScript(macVpnPidFile()));
+  macVpnRunning = false;
+}
+
 async function waitForPort(port, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -505,12 +534,12 @@ function normalizeVpnMode(value) {
 async function connectVpn(requestedMode = 'full-tunnel', requestedSource = 'relay') {
   const mode = normalizeVpnMode(requestedMode);
   const sourceId = getVpnSource(requestedSource).id;
-  if (vpnProcess && vpnStatus.state === 'connected' && vpnStatus.mode === mode && vpnStatus.sourceId === sourceId) return vpnStatus;
-  if (vpnProcess) await disconnectVpn();
-  if (mode === 'full-tunnel' && process.platform !== 'win32') {
-    return setVpnStatus({ state: 'error', message: 'Full-device mode is currently available on Windows only.', connectedAt: null, mode, requiresElevation: false });
+  if ((vpnProcess || macVpnRunning) && vpnStatus.state === 'connected' && vpnStatus.mode === mode && vpnStatus.sourceId === sourceId) return vpnStatus;
+  if (vpnProcess || macVpnRunning) await disconnectVpn();
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    return setVpnStatus({ state: 'error', message: 'Full-device mode is available on Windows and macOS only.', connectedAt: null, mode, sourceId, requiresElevation: false });
   }
-  if (mode === 'full-tunnel' && !(await isWindowsAdministrator())) {
+  if (process.platform === 'win32' && mode === 'full-tunnel' && !(await isWindowsAdministrator())) {
     return restartVpnElevated(mode, sourceId);
   }
   const sourceName = getVpnSource(sourceId).name;
@@ -524,29 +553,34 @@ async function connectVpn(requestedMode = 'full-tunnel', requestedSource = 'rela
     await validateVpnConfig(core);
     vpnDisconnecting = false;
     vpnProcessError = '';
-    const environment = { ...process.env };
-    const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === 'path') || 'PATH';
-    environment[pathKey] = `${path.dirname(core)}${path.delimiter}${environment[pathKey] || ''}`;
-    const child = spawn(core, ['run', '-c', vpnConfigFile()], { env: environment, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
-    vpnProcess = child;
-    child.stderr.on('data', (chunk) => { vpnProcessError = `${vpnProcessError}${chunk}`.slice(-8_192); });
-    child.once('error', (error) => { vpnProcessError = error.message; });
-    child.once('exit', (code) => {
-      if (vpnProcess !== child) return;
-      vpnProcess = null;
-      if (!vpnDisconnecting) {
-        const detail = vpnProcessError.trim().split(/\r?\n/).at(-1);
-        void restoreSavedSystemProxy().finally(() => setVpnStatus({ state: 'error', message: detail || `WLSAPlus relay stopped unexpectedly (${code ?? 'unknown'}).`, connectedAt: null, mode, requiresElevation: false }));
-      }
-    });
+    if (process.platform === 'darwin') {
+      await startMacVpn(core);
+    } else {
+      const environment = { ...process.env };
+      const pathKey = Object.keys(environment).find((key) => key.toLowerCase() === 'path') || 'PATH';
+      environment[pathKey] = `${path.dirname(core)}${path.delimiter}${environment[pathKey] || ''}`;
+      const child = spawn(core, ['run', '-c', vpnConfigFile()], { env: environment, windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'] });
+      vpnProcess = child;
+      child.stderr.on('data', (chunk) => { vpnProcessError = `${vpnProcessError}${chunk}`.slice(-8_192); });
+      child.once('error', (error) => { vpnProcessError = error.message; });
+      child.once('exit', (code) => {
+        if (vpnProcess !== child) return;
+        vpnProcess = null;
+        if (!vpnDisconnecting) {
+          const detail = vpnProcessError.trim().split(/\r?\n/).at(-1);
+          void restoreSavedSystemProxy().finally(() => setVpnStatus({ state: 'error', message: detail || `WLSAPlus relay stopped unexpectedly (${code ?? 'unknown'}).`, connectedAt: null, mode, requiresElevation: false }));
+        }
+      });
+    }
     await waitForPort(VPN_PORT);
     if (mode === 'full-tunnel') await waitForFullTunnelInterface();
     await verifyVpnConnection(mode);
     if (mode === 'system-proxy') await enableSystemProxy();
     return setVpnStatus({ state: 'connected', message: mode === 'full-tunnel' ? `Full device protected by ${sourceName}` : `Web traffic protected by ${sourceName}`, connectedAt: new Date().toISOString(), mode, sourceId, requiresElevation: false });
   } catch (error) {
-    const processExited = !vpnProcess || vpnProcess.exitCode !== null;
+    const processExited = process.platform === 'darwin' ? !macVpnRunning : (!vpnProcess || vpnProcess.exitCode !== null);
     vpnDisconnecting = true;
+    if (process.platform === 'darwin' && macVpnRunning) await stopMacVpn().catch(() => {});
     await stopVpnProcess();
     await restoreSavedSystemProxy().catch(() => {});
     const missingCore = error && (error.code === 'ENOENT' || error.code === 'EACCES');
@@ -560,10 +594,16 @@ async function disconnectVpn() {
   const mode = normalizeVpnMode(vpnStatus.mode);
   setVpnStatus({ state: 'disconnecting', message: 'Disconnecting...', mode, requiresElevation: false });
   vpnDisconnecting = true;
-  await restoreSavedSystemProxy().catch(() => {});
-  await stopVpnProcess();
-  vpnDisconnecting = false;
-  return setVpnStatus({ state: 'idle', message: 'Ready', connectedAt: null, mode, requiresElevation: false });
+  try {
+    await restoreSavedSystemProxy().catch(() => {});
+    if (process.platform === 'darwin') await stopMacVpn();
+    await stopVpnProcess();
+    vpnDisconnecting = false;
+    return setVpnStatus({ state: 'idle', message: 'Ready', connectedAt: null, mode, requiresElevation: false });
+  } catch (error) {
+    vpnDisconnecting = false;
+    return setVpnStatus({ state: 'connected', message: error instanceof Error ? error.message : 'The VPN is still connected.', connectedAt: vpnStatus.connectedAt, mode, requiresElevation: false });
+  }
 }
 
 function updaterErrorMessage(error) {
@@ -914,9 +954,13 @@ app.whenReady().then(async () => {
 app.on('before-quit', (event) => {
   isQuitting = true;
   phoneManager.dispose();
-  if ((vpnProcess || vpnStatus.state === 'connected') && !quitAfterCleanup) {
+  if ((vpnProcess || macVpnRunning || vpnStatus.state === 'connected') && !quitAfterCleanup) {
     event.preventDefault();
-    void disconnectVpn().finally(() => { quitAfterCleanup = true; app.quit(); });
+    void disconnectVpn().then((status) => {
+      if (status.state !== 'idle') return;
+      quitAfterCleanup = true;
+      app.quit();
+    });
   }
 });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });

@@ -29,8 +29,8 @@ test('full tunnel mode captures system routes and DNS', () => {
   assert.equal(config.dns.servers[0].detour, 'wlsaplus-relay');
 });
 
-test('sing-box accepts the generated full tunnel configuration', { skip: process.platform !== 'win32' }, (context) => {
-  const executable = path.join(__dirname, '..', 'build', 'vpn-core', 'sing-box.exe');
+test('sing-box accepts the generated full tunnel configuration', { skip: process.platform !== 'win32' && process.platform !== 'darwin' }, (context) => {
+  const executable = path.join(__dirname, '..', 'build', 'vpn-core', process.platform === 'win32' ? 'sing-box.exe' : 'sing-box');
   if (!fs.existsSync(executable)) return context.skip('sing-box is not available');
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'wlsaplus-vpn-config-'));
