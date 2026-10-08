@@ -81,6 +81,44 @@ describe('LocalStore', () => {
     expect(JSON.parse(localStorage.getItem('wlsaplus:progress') ?? '{}').courses).toHaveLength(1);
   });
 
+  it('preserves details independently for multiple grading terms', () => {
+    const store = new LocalStore();
+    const progress: ProgressSnapshot = {
+      syncedAt: '2026-09-04T08:00:00.000Z', term: 'S1', absenceTotal: 0, tardyTotal: 0,
+      attendanceStart: '', attendanceEnd: '', attendanceEvents: [],
+      courses: [{
+        id: 'course-terms', name: 'Physics', teacher: 'Teacher', room: '310', meetingPattern: 'P1',
+        term: 'S1', grade: 'A', absences: 0, tardies: 0,
+        detailsPath: '/guardian/scores.html?frn=1&fg=S1', details: null,
+        terms: [
+          { term: 'S1', grade: 'A', detailsPath: '/guardian/scores.html?frn=1&fg=S1', details: null },
+          { term: 'S2', grade: 'B', detailsPath: '/guardian/scores.html?frn=1&fg=S2', details: null },
+        ],
+      }],
+    };
+    store.saveProgress(progress);
+    const s1 = { description: '', teacherComment: 'S1', assignments: [], loadedAt: '2026-09-04T08:01:00.000Z' };
+    const s2 = { description: '', teacherComment: 'S2', assignments: [], loadedAt: '2026-09-04T08:02:00.000Z' };
+    store.updateProgressCourse('course-terms', {
+      details: s1,
+      terms: progress.courses[0].terms!.map((term, index) => ({ ...term, details: index === 0 ? s1 : s2 })),
+    });
+
+    store.saveProgress({
+      ...progress,
+      syncedAt: '2026-09-04T08:15:00.000Z',
+      courses: progress.courses.map((course) => ({
+        ...course,
+        grade: 'A+',
+        terms: course.terms!.map((term) => ({ ...term, grade: term.term === 'S1' ? 'A+' : 'B+' })),
+      })),
+    });
+
+    const terms = store.progress().courses[0].terms!;
+    expect(terms.map((term) => term.details?.teacherComment)).toEqual(['S1', 'S2']);
+    expect(store.progress().courses[0].details?.teacherComment).toBe('S1');
+  });
+
   it('adds and edits task titles and details', () => {
     const store = new LocalStore();
     store.addTodo('  Draft essay  ', '  Include three sources.  ');
