@@ -62,6 +62,13 @@ export interface CourseProgressDetails {
   loadedAt: string;
 }
 
+export interface ProgressCourseTerm {
+  term: string;
+  grade: string;
+  detailsPath: string;
+  details: CourseProgressDetails | null;
+}
+
 export interface ProgressCourse {
   id: string;
   name: string;
@@ -74,6 +81,8 @@ export interface ProgressCourse {
   tardies: number | null;
   detailsPath: string;
   details: CourseProgressDetails | null;
+  /** Results and detail pages for every grading term shown by PowerSchool. */
+  terms?: ProgressCourseTerm[];
 }
 
 export interface AttendanceEvent {

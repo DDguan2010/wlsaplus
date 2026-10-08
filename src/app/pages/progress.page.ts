@@ -4,7 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import type { AssignmentScore, AttendanceEvent, ProgressCourse } from '../core/models';
+import type { AssignmentScore, AttendanceEvent, ProgressCourse, ProgressCourseTerm } from '../core/models';
 import { LocalStore } from '../core/local-store.service';
 import { PowerSchoolService } from '../core/powerschool.service';
 
@@ -51,7 +51,11 @@ import { PowerSchoolService } from '../core/powerschool.service';
                 <span class="course-icon">{{ initials(course.name) }}</span>
                 <span class="course-copy"><strong>{{ course.name }}</strong><span>{{ course.teacher || 'Teacher unavailable' }} @if (course.room) { | Room {{ course.room }} }</span></span>
                 <span class="course-results">
-                  <span><small>Grade</small><strong [class.unposted]="!course.grade">{{ course.grade || 'Not posted' }}</strong></span>
+                  <span class="course-term-results">
+                    @for (term of courseTerms(course); track term.term + term.detailsPath) {
+                      <span><small>{{ term.term || 'Grade' }}</small><strong [class.unposted]="!term.grade">{{ term.grade || 'Not posted' }}</strong></span>
+                    }
+                  </span>
                   <span><small>Absent</small><strong>{{ valueOrDash(course.absences) }}</strong></span>
                   <span><small>Tardy</small><strong>{{ valueOrDash(course.tardies) }}</strong></span>
                 </span>
@@ -64,38 +68,47 @@ import { PowerSchoolService } from '../core/powerschool.service';
                     <div class="detail-loading"><mat-spinner diameter="28"/><span>Loading assignments...</span></div>
                   } @else if (courseError()) {
                     <div class="detail-error" role="alert"><span>{{ courseError() }}</span><button mat-stroked-button (click)="reloadCourse(course)">Try again</button></div>
-                  } @else if (course.details; as details) {
+                  } @else {
                     <div class="course-facts">
                       @if (course.meetingPattern) { <span><span class="material-symbols-rounded">calendar_today</span>{{ course.meetingPattern }}</span> }
                       @if (course.room) { <span><span class="material-symbols-rounded">location_on</span>Room {{ course.room }}</span> }
                     </div>
-                    @if (details.teacherComment) {
-                      <section class="detail-note"><h3>Teacher comment</h3><p>{{ details.teacherComment }}</p></section>
-                    }
-                    @if (details.description) {
-                      <section class="detail-note"><h3>Course description</h3><p>{{ details.description }}</p></section>
-                    }
-                    <div class="assignments-heading"><h3>Assignments</h3><span>{{ details.assignments.length }}</span></div>
-                    <div class="assignment-list">
-                      @for (assignment of details.assignments; track assignment.id) {
-                        <article class="assignment-row">
-                          <div class="assignment-main">
-                            <strong>{{ assignment.name }}</strong>
-                            <span>@if (assignment.dueDate) { Due {{ dateValue(assignment.dueDate) | date:'MMM d' }} } @if (assignment.category) { | {{ assignment.category }} }</span>
-                            @if (assignment.description) { <p>{{ assignment.description }}</p> }
-                            @if (assignmentFlags(assignment).length) {
-                              <div class="status-list">@for (flag of assignmentFlags(assignment); track flag) { <span>{{ flag }}</span> }</div>
+                    @for (term of courseTerms(course); track term.term + term.detailsPath) {
+                      <section class="term-detail">
+                        <div class="term-heading"><h3>{{ term.term || 'Grade details' }}</h3><span>{{ term.grade || 'Not posted' }}</span></div>
+                        @if (term.details; as details) {
+                          @if (details.teacherComment) {
+                            <section class="detail-note"><h4>Teacher comment</h4><p>{{ details.teacherComment }}</p></section>
+                          }
+                          @if (details.description) {
+                            <section class="detail-note"><h4>Course description</h4><p>{{ details.description }}</p></section>
+                          }
+                          <div class="assignments-heading"><h4>Assignments</h4><span>{{ details.assignments.length }}</span></div>
+                          <div class="assignment-list">
+                            @for (assignment of details.assignments; track assignment.id) {
+                              <article class="assignment-row">
+                                <div class="assignment-main">
+                                  <strong>{{ assignment.name }}</strong>
+                                  <span>@if (assignment.dueDate) { Due {{ dateValue(assignment.dueDate) | date:'MMM d' }} } @if (assignment.category) { | {{ assignment.category }} }</span>
+                                  @if (assignment.description) { <p>{{ assignment.description }}</p> }
+                                  @if (assignmentFlags(assignment).length) {
+                                    <div class="status-list">@for (flag of assignmentFlags(assignment); track flag) { <span>{{ flag }}</span> }</div>
+                                  }
+                                </div>
+                                <div class="assignment-score" [class.no-score]="scoreText(assignment) === 'Not scored'">
+                                  <strong>{{ scoreText(assignment) }}</strong>
+                                  @if (pointsText(assignment)) { <span>{{ pointsText(assignment) }}</span> }
+                                </div>
+                              </article>
+                            } @empty {
+                              <div class="empty-state compact"><div><span class="material-symbols-rounded">assignment</span><p>No assignments have been posted for this term.</p></div></div>
                             }
                           </div>
-                          <div class="assignment-score" [class.no-score]="scoreText(assignment) === 'Not scored'">
-                            <strong>{{ scoreText(assignment) }}</strong>
-                            @if (pointsText(assignment)) { <span>{{ pointsText(assignment) }}</span> }
-                          </div>
-                        </article>
-                      } @empty {
-                        <div class="empty-state compact"><div><span class="material-symbols-rounded">assignment</span><p>No assignments have been posted for this course.</p></div></div>
-                      }
-                    </div>
+                        } @else {
+                          <p class="term-unavailable">Details are not available for this term yet.</p>
+                        }
+                      </section>
+                    }
                   }
                 </div>
               }
@@ -152,13 +165,14 @@ import { PowerSchoolService } from '../core/powerschool.service';
     .course-toggle:hover { background: color-mix(in srgb, var(--app-accent-soft) 25%, transparent); } .course-item.expanded .course-toggle { background: color-mix(in srgb, var(--app-accent-soft) 32%, transparent); }
     .course-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 8px; background: var(--app-accent-soft); color: var(--app-accent); font-weight: 700; }
     .course-copy { min-width: 0; display: grid; gap: 5px; } .course-copy strong { overflow: hidden; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; } .course-copy > span { overflow: hidden; color: var(--app-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-    .course-results { display: grid; grid-template-columns: minmax(100px, 1.5fr) repeat(2, minmax(62px, 1fr)); gap: 8px; } .course-results > span { min-width: 0; display: grid; gap: 4px; } .course-results small { color: var(--app-muted); font-size: 10px; text-transform: uppercase; } .course-results strong { overflow-wrap: anywhere; font-size: 14px; font-variant-numeric: tabular-nums; } .course-results .unposted { color: var(--app-muted); font-size: 12px; font-weight: 500; }
+    .course-results { display: grid; grid-template-columns: minmax(100px, 1.5fr) repeat(2, minmax(62px, 1fr)); gap: 8px; } .course-results > span { min-width: 0; display: grid; gap: 4px; } .course-term-results { display: flex !important; flex-wrap: wrap; gap: 8px; } .course-term-results > span { min-width: 58px; display: grid; gap: 4px; } .course-results small { color: var(--app-muted); font-size: 10px; text-transform: uppercase; } .course-results strong { overflow-wrap: anywhere; font-size: 14px; font-variant-numeric: tabular-nums; } .course-results .unposted { color: var(--app-muted); font-size: 12px; font-weight: 500; }
     .expand-icon { color: var(--app-muted); }
     .course-detail { padding: 18px 24px 24px 80px; border-top: 1px solid var(--app-border); background: color-mix(in srgb, var(--app-surface-raised) 45%, transparent); }
     .detail-loading { min-height: 86px; display: flex; align-items: center; gap: 12px; color: var(--app-muted); font-size: 13px; } .detail-error { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 14px; color: #a62b2b; font-size: 13px; }
     .course-facts { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 18px; color: var(--app-muted); font-size: 12px; } .course-facts span { display: inline-flex; align-items: center; gap: 5px; } .course-facts .material-symbols-rounded { font-size: 17px; }
-    .detail-note { margin: 0 0 18px; } .detail-note h3, .assignments-heading h3 { margin: 0 0 6px; font-size: 13px; } .detail-note p { margin: 0; color: var(--app-muted); font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
-    .assignments-heading { min-height: 32px; display: flex; align-items: center; gap: 8px; } .assignments-heading h3 { margin: 0; } .assignments-heading span { color: var(--app-muted); font-size: 12px; }
+    .term-detail { padding-top: 16px; margin-top: 16px; border-top: 1px solid var(--app-border); } .term-detail:first-of-type { margin-top: 0; padding-top: 0; border-top: 0; } .term-heading { min-height: 28px; display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; } .term-heading h3 { margin: 0; font-size: 15px; } .term-heading span { color: var(--app-accent); font-size: 13px; font-weight: 700; }
+    .detail-note { margin: 0 0 18px; } .detail-note h4, .assignments-heading h4 { margin: 0 0 6px; font-size: 13px; } .detail-note p { margin: 0; color: var(--app-muted); font-size: 13px; line-height: 1.5; white-space: pre-wrap; }
+    .assignments-heading { min-height: 32px; display: flex; align-items: center; gap: 8px; } .assignments-heading h4 { margin: 0; } .assignments-heading span { color: var(--app-muted); font-size: 12px; } .term-unavailable { margin: 0; color: var(--app-muted); font-size: 13px; }
     .assignment-list { border-top: 1px solid var(--app-border); } .assignment-row { min-height: 76px; padding: 13px 0; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 18px; border-bottom: 1px solid var(--app-border); } .assignment-row:last-child { border-bottom: 0; }
     .assignment-main { min-width: 0; display: grid; gap: 4px; } .assignment-main > strong { font-size: 13px; } .assignment-main > span { color: var(--app-muted); font-size: 11px; } .assignment-main p { margin: 3px 0 0; color: var(--app-muted); font-size: 12px; line-height: 1.4; }
     .assignment-score { min-width: 82px; display: grid; justify-items: end; gap: 3px; } .assignment-score strong { color: var(--app-accent); font-size: 17px; font-variant-numeric: tabular-nums; } .assignment-score span { color: var(--app-muted); font-size: 10px; } .assignment-score.no-score strong { color: var(--app-muted); font-size: 12px; font-weight: 500; }
@@ -247,6 +261,9 @@ export class ProgressPage {
   }
 
   valueOrDash(value: number | null): number | string { return value ?? '-'; }
+  courseTerms(course: ProgressCourse): ProgressCourseTerm[] {
+    return course.terms?.length ? course.terms : [{ term: course.term, grade: course.grade, detailsPath: course.detailsPath, details: course.details }];
+  }
   dateValue(value: string): string { return value ? `${value}T12:00:00` : ''; }
   initials(name: string): string { return name.split(/[\s_]+/).filter(Boolean).slice(0, 2).map((word) => word[0]).join('').toUpperCase(); }
   assignmentFlags(assignment: AssignmentScore): string[] {

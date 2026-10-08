@@ -73,6 +73,27 @@ describe('parsePowerSchoolProgress', () => {
       term: '', absenceTotal: null, tardyTotal: null, courses: [], attendanceEvents: [],
     });
   });
+
+  it('keeps multiple grading terms aligned with their own detail links', () => {
+    const home = `
+      <table class="linkDescList grid">
+        <tr><th>Meeting</th><th>Course</th><th>S1</th><th>S2</th><th>Absences</th><th>Tardies</th></tr>
+        <tr id="ccid_52">
+          <td>P1(Mon)</td>
+          <td>Physics<br><a title="Details about Alex Teacher"></a><span class="display-flex">- Rm: 310</span></td>
+          <td><a href="scores.html?frn=0052&amp;fg=S1">A+ 94.5</a></td>
+          <td><a href="scores.html?frn=0052&amp;fg=S2">[ i ]</a></td>
+          <td>0</td><td>1</td>
+        </tr>
+      </table>`;
+
+    const course = parsePowerSchoolProgress(home).courses[0];
+    expect(course).toMatchObject({ name: 'Physics', room: '310', grade: 'A+ 94.5', absences: 0, tardies: 1 });
+    expect(course.terms).toEqual([
+      { term: 'S1', grade: 'A+ 94.5', detailsPath: '/guardian/scores.html?frn=0052&fg=S1', details: null },
+      { term: 'S2', grade: '', detailsPath: '/guardian/scores.html?frn=0052&fg=S2', details: null },
+    ]);
+  });
 });
 
 describe('PowerSchool assignment parsing', () => {

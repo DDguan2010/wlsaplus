@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import { normalizeTodoColor, normalizeTodoEndAt, normalizeTodoIcon, normalizeTodoTimeType } from './models';
-import type { AppColor, AppSettings, ProgressCourse, ProgressSnapshot, ScheduleSnapshot, ThemeMode, TodoColor, TodoIcon, TodoItem, TodoTimeType } from './models';
+import type { AppColor, AppSettings, ProgressCourse, ProgressCourseTerm, ProgressSnapshot, ScheduleSnapshot, ThemeMode, TodoColor, TodoIcon, TodoItem, TodoTimeType } from './models';
 
 const EMPTY_SCHEDULE: ScheduleSnapshot = {
   syncedAt: '',
@@ -30,6 +30,16 @@ const EMPTY_PROGRESS: ProgressSnapshot = {
 
 const THEME_MODES = new Set<ThemeMode>(['system', 'light', 'dark']);
 const APP_COLORS = new Set<AppColor>(['default', 'red', 'orange', 'yellow', 'green', 'blue', 'purple', 'pink', 'rose']);
+
+function progressTerms(course: ProgressCourse): ProgressCourseTerm[] {
+  if (course.terms?.length) return course.terms;
+  return [{
+    term: course.term,
+    grade: course.grade,
+    detailsPath: course.detailsPath,
+    details: course.details,
+  }];
+}
 
 @Injectable({ providedIn: 'root' })
 export class LocalStore {
@@ -81,9 +91,28 @@ export class LocalStore {
       ...value,
       courses: value.courses.map((course) => {
         const cached = previous.get(course.id);
-        return cached?.details && cached.detailsPath === course.detailsPath
-          ? { ...course, details: cached.details }
-          : course;
+        if (!cached) return course;
+
+        const cachedTerms = progressTerms(cached);
+        const terms = progressTerms(course).map((term) => {
+          const matching = cachedTerms.find((candidate) =>
+            candidate.term === term.term && candidate.detailsPath === term.detailsPath);
+          if (matching?.details) return { ...term, details: matching.details };
+          // Keep legacy single-term details when the refreshed parser has not
+          // populated the optional `terms` field yet.
+          if (!course.terms?.length && cached.details && cached.detailsPath === term.detailsPath) {
+            return { ...term, details: cached.details };
+          }
+          return term;
+        });
+        const primary = terms.find((term) => term.term === course.term && term.detailsPath === course.detailsPath)
+          ?? terms.find((term) => term.grade || term.detailsPath)
+          ?? terms[0];
+        return {
+          ...course,
+          terms: course.terms?.length ? terms : course.terms,
+          details: primary?.details ?? null,
+        };
       }),
     };
     this.progress.set(merged);

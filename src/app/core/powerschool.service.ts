@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import type { PowerSchoolCredentials, ProgressCourse, ProgressSnapshot, ScheduleSnapshot } from './models';
+import type { CourseProgressDetails, PowerSchoolCredentials, ProgressCourse, ProgressCourseTerm, ProgressSnapshot, ScheduleSnapshot } from './models';
 import { CredentialVault } from './credential-vault.service';
 import { LocalStore } from './local-store.service';
 import {
@@ -81,54 +81,89 @@ export class PowerSchoolService {
   async loadCourse(courseId: string, force = false): Promise<ProgressCourse> {
     const course = this.store.progress().courses.find((item) => item.id === courseId);
     if (!course) throw new Error('This course is no longer available.');
-    if (!force && course.details && Date.now() - Date.parse(course.details.loadedAt) < 5 * 60_000) return course;
-    if (!course.detailsPath) {
-      const updated = this.store.updateProgressCourse(courseId, {
-        details: { description: '', teacherComment: '', assignments: [], loadedAt: new Date().toISOString() },
-      });
+
+    const sourceTerms: ProgressCourseTerm[] = course.terms?.length ? course.terms : [{
+      term: course.term,
+      grade: course.grade,
+      detailsPath: course.detailsPath,
+      details: course.details,
+    }];
+    const availableTerms = sourceTerms.filter((term) => term.detailsPath);
+    const fresh = !force && sourceTerms.length > 0 && sourceTerms.every((term) =>
+      term.details && Date.now() - Date.parse(term.details.loadedAt) < 5 * 60_000);
+    if (fresh) return course;
+
+    if (!availableTerms.length) {
+      const empty = sourceTerms.map((term) => ({ ...term, details: term.details ?? this.emptyCourseDetails() }));
+      const updated = this.store.updateProgressCourse(courseId, { terms: course.terms?.length ? empty : course.terms, details: empty[0]?.details ?? null });
       if (!updated) throw new Error('This course is no longer available.');
       return updated;
     }
+
     const credentials = await this.vault.get();
     if (!credentials) {
-      if (course.details) return course;
+      if (sourceTerms.some((term) => term.details)) return course;
       throw new Error('Connect to PowerSchool to load this course.');
     }
 
     try {
-      const page = await this.platform.request({
-        baseUrl: credentials.schoolUrl,
-        path: course.detailsPath,
-        method: 'GET',
+      const settledTerms = await Promise.allSettled(sourceTerms.map(async (term) => {
+        if (!term.detailsPath) {
+          return { ...term, details: term.details ?? this.emptyCourseDetails() };
+        }
+        if (!force && term.details && Date.now() - Date.parse(term.details.loadedAt) < 5 * 60_000) return term;
+        return { ...term, details: await this.fetchCourseDetails(credentials.schoolUrl, term.detailsPath) };
+      }));
+      let firstError: unknown = null;
+      const loadedTerms: ProgressCourseTerm[] = settledTerms.map((result, index) => {
+        if (result.status === 'fulfilled') return result.value;
+        firstError ??= result.reason;
+        return sourceTerms[index];
       });
-      this.requireSuccessful(page);
-      this.requireSignedIn(page.text);
-      const lookup = parseAssignmentLookupRequest(page.text);
-      let assignmentJson = '[]';
-      if (lookup) {
-        const assignments = await this.platform.request({
-          baseUrl: credentials.schoolUrl,
-          path: `/ws/xte/assignment/lookup?_=${Date.now()}`,
-          method: 'POST',
-          body: JSON.stringify(lookup),
-          referrerPath: course.detailsPath,
-          headers: {
-            accept: 'application/json, text/plain, */*',
-            'content-type': 'application/json;charset=UTF-8',
-          },
-        });
-        this.requireSuccessful(assignments);
-        assignmentJson = assignments.text;
-      }
+
+      // Details are independent per grading period. A missing or temporarily
+      // unavailable S2 page must not hide an otherwise valid S1 result.
+      if (firstError && !loadedTerms.some((term) => term.details)) throw firstError;
       const updated = this.store.updateProgressCourse(courseId, {
-        details: parsePowerSchoolCourseDetails(page.text, assignmentJson),
+        terms: loadedTerms,
+        details: loadedTerms.find((term) => term.term === course.term && term.detailsPath === course.detailsPath)?.details
+          ?? loadedTerms.find((term) => term.details)?.details
+          ?? null,
       });
       if (!updated) throw new Error('This course is no longer available.');
       return updated;
     } catch (error) {
-      if (course.details) return course;
+      if (sourceTerms.some((term) => term.details)) return course;
       throw error;
     }
+  }
+
+  private emptyCourseDetails(): CourseProgressDetails {
+    return { description: '', teacherComment: '', assignments: [], loadedAt: new Date().toISOString() };
+  }
+
+  private async fetchCourseDetails(baseUrl: string, detailsPath: string): Promise<CourseProgressDetails> {
+    const page = await this.platform.request({ baseUrl, path: detailsPath, method: 'GET' });
+    this.requireSuccessful(page);
+    this.requireSignedIn(page.text);
+    const lookup = parseAssignmentLookupRequest(page.text);
+    let assignmentJson = '[]';
+    if (lookup) {
+      const assignments = await this.platform.request({
+        baseUrl,
+        path: `/ws/xte/assignment/lookup?_=${Date.now()}`,
+        method: 'POST',
+        body: JSON.stringify(lookup),
+        referrerPath: detailsPath,
+        headers: {
+          accept: 'application/json, text/plain, */*',
+          'content-type': 'application/json;charset=UTF-8',
+        },
+      });
+      this.requireSuccessful(assignments);
+      assignmentJson = assignments.text;
+    }
+    return parsePowerSchoolCourseDetails(page.text, assignmentJson);
   }
 
   private async fetchSchedule(baseUrl: string): Promise<ScheduleSnapshot> {

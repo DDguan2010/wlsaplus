@@ -14,6 +14,8 @@ extraResources:
     to: vpn-core
   - from: build/phone-core
     to: phone-core
+  - from: "electron/bin/mac-vpn.tar.gz"
+    to: "bin/mac-vpn.tar.gz"
 win:
   executableName: WLSAPlus
   icon: build/icon.ico

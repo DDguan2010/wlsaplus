@@ -5,6 +5,7 @@ import type {
   ClassSession,
   Course,
   CourseProgressDetails,
+  ProgressCourseTerm,
   ProgressSnapshot,
   ScheduleSnapshot,
 } from './models';
@@ -179,33 +180,95 @@ function courseCellDetails(cell: Element): { name: string; teacher: string; room
   return { name, teacher, room };
 }
 
+function expandedHeaderColumns(table: Element): string[] {
+  const header = Array.from(table.querySelectorAll('tr')).find((row) => {
+    const cells = Array.from(row.querySelectorAll(':scope > th'));
+    return cells.length > 0 && cells.some((cell) => /^(?:课程|course)$/i.test(clean(cell.textContent)));
+  });
+  if (!header) return [];
+  const columns: string[] = [];
+  for (const cell of Array.from(header.querySelectorAll(':scope > th'))) {
+    const label = clean(cell.textContent);
+    const span = Math.max(1, Number(cell.getAttribute('colspan')) || 1);
+    columns.push(...Array.from({ length: span }, () => label));
+  }
+  return columns;
+}
+
+function progressColumnIndex(columns: string[], pattern: RegExp): number {
+  return columns.findIndex((label) => pattern.test(label));
+}
+
+function termLabel(value: string): string {
+  return clean(value).replace(/\s+/g, '').toUpperCase();
+}
+
+function termColumns(table: Element, columns: string[], rows: Element[]): Array<{ term: string; index: number }> {
+  const result = columns.flatMap((label, index) => {
+    const term = termLabel(label);
+    return /^(?:S|T|Q|Y|F)\d{1,3}$/.test(term) ? [{ term, index }] : [];
+  });
+  if (result.length) return result;
+
+  // Some PowerSchool themes omit useful header labels. In that case infer the
+  // term from each score link's `fg` query parameter and keep its real column.
+  const inferred = new Map<string, number>();
+  for (const row of rows) {
+    for (const [index, cell] of Array.from(row.querySelectorAll(':scope > td')).entries()) {
+      const href = cell.querySelector('a[href*="scores.html"]')?.getAttribute('href') ?? '';
+      try {
+        const term = termLabel(new URL(href, 'https://powerschool.invalid').searchParams.get('fg') ?? '');
+        if (term && !inferred.has(term)) inferred.set(term, index);
+      } catch { /* Ignore malformed links and inspect the next cell. */ }
+    }
+  }
+  return [...inferred.entries()].map(([term, index]) => ({ term, index })).sort((left, right) => left.index - right.index);
+}
+
 export function parsePowerSchoolProgress(homeHtml: string, attendanceHtml = ''): ProgressSnapshot {
   const doc = new DOMParser().parseFromString(homeHtml, 'text/html');
   const table = Array.from(doc.querySelectorAll('table.linkDescList, table.grid'))
     .find((item) => item.querySelector('tr[id^="ccid_"]'));
-  const courses = table ? Array.from(table.querySelectorAll('tr[id^="ccid_"]')).flatMap((row, index) => {
+  const rows = table ? Array.from(table.querySelectorAll('tr[id^="ccid_"]')) : [];
+  const columns = table ? expandedHeaderColumns(table) : [];
+  const courseColumn = progressColumnIndex(columns, /^(?:课程|course)$/i);
+  const absenceColumn = progressColumnIndex(columns, /(?:缺勤|absence)/i);
+  const tardyColumn = progressColumnIndex(columns, /(?:迟到|tard(?:y|ies))/i);
+  const terms = table ? termColumns(table, columns, rows) : [];
+  const courses = table ? rows.flatMap((row, index) => {
     const cells = Array.from(row.querySelectorAll(':scope > td'));
     if (cells.length < 5) return [];
-    const courseCell = cells.at(-4)!;
-    const gradeCell = cells.at(-3)!;
+    const courseIndex = courseColumn >= 0 && courseColumn < cells.length
+      ? courseColumn
+      : Math.max(1, cells.length - terms.length - 2);
+    const courseCell = cells[courseIndex]!;
     const details = courseCellDetails(courseCell);
-    const detailsPath = powerSchoolPath(gradeCell.querySelector('a[href*="scores.html"]')?.getAttribute('href') ?? '');
     if (!details.name) return [];
-    const gradeText = clean(withoutScreenReaderText(gradeCell).textContent);
-    let term = '';
-    try { term = new URL(detailsPath, 'https://powerschool.invalid').searchParams.get('fg') ?? ''; } catch { /* Keep it empty. */ }
+    const termResults: ProgressCourseTerm[] = terms.map(({ term, index: termIndex }) => {
+      const gradeCell = cells[termIndex];
+      const detailsPath = powerSchoolPath(gradeCell?.querySelector('a[href*="scores.html"]')?.getAttribute('href') ?? '');
+      const gradeText = clean(gradeCell ? withoutScreenReaderText(gradeCell).textContent : '');
+      return {
+        term,
+        grade: /^\[\s*i\s*\]$/i.test(gradeText) ? '' : gradeText,
+        detailsPath,
+        details: null,
+      };
+    });
+    const primary = termResults.find((item) => item.grade || item.detailsPath) ?? termResults[0] ?? { term: '', grade: '', detailsPath: '', details: null };
     return [{
       id: row.id.replace(/^ccid_/, '') || `progress-course-${index}`,
       name: details.name,
       teacher: details.teacher,
       room: details.room,
       meetingPattern: clean(cells[0].textContent),
-      term,
-      grade: /^\[\s*i\s*\]$/i.test(gradeText) ? '' : gradeText,
-      absences: numberOrNull(cells.at(-2)?.textContent),
-      tardies: numberOrNull(cells.at(-1)?.textContent),
-      detailsPath,
+      term: primary.term,
+      grade: primary.grade,
+      absences: numberOrNull(cells[absenceColumn >= 0 ? absenceColumn : cells.length - 2]?.textContent),
+      tardies: numberOrNull(cells[tardyColumn >= 0 ? tardyColumn : cells.length - 1]?.textContent),
+      detailsPath: primary.detailsPath,
       details: null,
+      terms: termResults,
     }];
   }) : [];
   const attendance = parseAttendanceHistory(attendanceHtml);
