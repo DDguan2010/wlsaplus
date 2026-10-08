@@ -324,58 +324,6 @@ function quoteWindowsArgument(value) {
 }
 
 async function restartVpnElevated(mode, sourceId = 'relay') {
-  if (process.platform === 'darwin') {
-    const { exec, execSync } = require('child_process');   
-    const path = require('path');
-    const fs = require('fs');
-    const { app } = require('electron');
-  
-    const tarPath = path.join(process.resourcesPath, 'bin/mac-vpn.tar.gz');
-    const targetDir = path.join(app.getPath('userData'), 'vpn-bin');
-    const clashPkgDir = path.join(targetDir, 'clash_pkg');
-    const execPath = path.join(clashPkgDir, 'clash');
-    const scriptPath = path.join(targetDir, 'run.sh');
-
-    // 1. 在普通权限下同步完成解压与赋予执行权限（不引发 AppleScript 阻塞）
-    try {
-      execSync(`mkdir -p "${targetDir}"`);
-      execSync(`tar -xzf "${tarPath}" -C "${targetDir}"`);
-      execSync(`chmod +x "${execPath}"`);
-    } catch (err) {
-      console.error('解压或文件准备失败:', err);
-      setVpnStatus({ state: 'error', message: 'Failed to extract VPN binaries.', connectedAt: null, mode });
-      throw err;
-    }
-
-    // 2. 写入独立的 Shell 启动脚本，内部用 > /dev/null 2>&1 & 脱离终端输出
-    const scriptContent = `#!/bin/bash
-"${execPath}" -d "${clashPkgDir}" > /dev/null 2>&1 &
-`;
-    try {
-      if (fs.existsSync(scriptPath)) {
-        fs.rmSync(scriptPath, { force: true });
-      }
-    } catch (e) {
-      console.warn('清理旧 run.sh 失败:', e);
-    }
-    fs.writeFileSync(scriptPath, scriptContent, { mode: 0o755 });
-
-    // 3. AppleScript 只提权执行 run.sh 脚本，执行完即刻返回，不会卡住
-    const sudoScript = `osascript -e 'do shell script quoted form of posix path of "${scriptPath}" with administrator privileges'`;
-    
-    return new Promise((resolve, reject) => {
-      exec(sudoScript, (error, stdout) => {
-        if (error) {
-          console.error('用户拒绝提供管理员权限或启动失败:', error);
-          setVpnStatus({ state: 'error', message: 'User denied administrator privileges.', connectedAt: null, mode });
-          reject(error);
-        } else {
-          setVpnStatus({ state: 'connected', message: '', connectedAt: Date.now(), mode, requiresElevation: true });
-          resolve(stdout);
-        }
-      });
-    });
-  }
   if (process.platform !== 'win32' || mode !== 'full-tunnel') throw new Error('Administrator restart is available for Windows full-device mode only.');
   if (await isWindowsAdministrator()) return connectVpn(mode, sourceId);
 
