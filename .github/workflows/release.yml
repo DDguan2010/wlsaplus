@@ -78,6 +78,8 @@ jobs:
       - uses: actions/setup-go@v5
         with: { go-version: '1.27.1', cache-dependency-path: phone-network/go.sum }
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install Android native toolchain
         run: sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0'
       - name: Test phone network
