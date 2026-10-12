@@ -1,6 +1,6 @@
 {
-  "id": "release-1.0.8-2026-09-14",
-  "title": "WLSAplus 1.0.8 is here",
-  "content": "Version 1.0.8 adds the Map tool and improves the VPN full-device tunnel. The new VPN relay is faster and costs a lot to operate. If WLSAplus helps you, you can support development: https://ifdian.net/a/02studio",
+  "id": "release-1.0.9-2026-10-12",
+  "title": "WLSAPlus v1.0.9 update",
+  "content": "Version 1.0.9 fixes bugs in Schedule and Progress. Week Grid now shows Saturday and Sunday classes. Progress correctly displays grades for multiple terms, including S1 and S2, with separate assignment details for each term, and preserves loaded details when refreshing. Update to v1.0.9 to get these fixes.",
   "type": "info"
 }
