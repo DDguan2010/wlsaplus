@@ -1,6 +1,6 @@
 {
-  "id": "release-1.0.9-2026-10-12",
-  "title": "WLSAPlus v1.0.9 update",
-  "content": "Version 1.0.9 fixes bugs in Schedule and Progress. Week Grid now shows Saturday and Sunday classes. Progress correctly displays grades for multiple terms, including S1 and S2, with separate assignment details for each term, and preserves loaded details when refreshing. Update to v1.0.9 to get these fixes.",
-  "type": "info"
+  "id": "vpn-daily-limit-2026-10-19",
+  "title": "VPN daily limit update",
+  "content": "Some users have been consuming a very large amount of the shared VPN quota, so the shared service now has a total daily limit of 20 GB. This limit applies to subscription transfers through the relay and resets at 00:00 UTC. If it is reached, new subscription downloads may be unavailable until the next UTC day. The upstream provider's quota reset does not change this relay limit.",
+  "type": "warning"
 }

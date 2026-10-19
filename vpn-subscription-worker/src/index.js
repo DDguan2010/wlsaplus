@@ -1,4 +1,8 @@
+import { DurableObject } from 'cloudflare:workers';
+
 const ALLOWED_FORMATS = new Set(['clash', 'ss']);
+export const DAILY_EGRESS_LIMIT_BYTES = 20_000_000_000;
+const QUOTA_KEY = 'global';
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   'https://wlsaplus.02studio.xyz',
   'https://wlsap.02studio.xyz',
@@ -30,6 +34,27 @@ function responseHeaders(request, env, contentType = 'text/plain; charset=utf-8'
 function json(request, env, value, status) {
   const headers = responseHeaders(request, env, 'application/json; charset=utf-8');
   return new Response(JSON.stringify(value), { status, headers });
+}
+
+function utcDay() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+async function reserveDailyEgress(env, bytes) {
+  if (!env.SUBSCRIPTION_QUOTA) return { allowed: false, unavailable: true, remaining: 0 };
+  const id = env.SUBSCRIPTION_QUOTA.idFromName(QUOTA_KEY);
+  const stub = env.SUBSCRIPTION_QUOTA.get(id);
+  const response = await stub.fetch('https://quota.internal/reserve', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date: utcDay(), bytes }),
+  });
+  if (!response.ok) return { allowed: false, remaining: 0 };
+  const result = await response.json();
+  return {
+    allowed: true,
+    remaining: Number.isSafeInteger(result.remaining) ? result.remaining : 0,
+  };
 }
 
 export default {
@@ -81,8 +106,58 @@ export default {
       return json(request, env, { error: `Upstream returned HTTP ${upstreamResponse.status}` }, 502);
     }
 
+    // Buffer the subscription so the Durable Object can reserve the exact
+    // number of bytes before any of the response is sent to the client.
+    const payload = await upstreamResponse.arrayBuffer();
+    const quota = await reserveDailyEgress(env, payload.byteLength);
+    if (quota.unavailable) {
+      return json(request, env, { error: 'Daily quota storage is not configured' }, 503);
+    }
+    if (!quota.allowed) {
+      return json(request, env, {
+        error: 'The shared daily subscription transfer limit has been reached. Try again tomorrow.',
+        limitBytes: DAILY_EGRESS_LIMIT_BYTES,
+      }, 429);
+    }
+
     const headers = responseHeaders(request, env, upstreamResponse.headers.get('Content-Type') || 'text/plain; charset=utf-8');
+    headers.set('Content-Length', String(payload.byteLength));
+    headers.set('X-WLSAPlus-Daily-Limit-Bytes', String(DAILY_EGRESS_LIMIT_BYTES));
+    headers.set('X-WLSAPlus-Daily-Remaining-Bytes', String(quota.remaining));
     if (origin) headers.set('Access-Control-Allow-Origin', origin);
-    return new Response(upstreamResponse.body, { status: 200, headers });
+    return new Response(payload, { status: 200, headers });
   },
 };
+
+export class DailyQuota extends DurableObject {
+  async fetch(request) {
+    if (request.method !== 'POST' || new URL(request.url).pathname !== '/reserve') {
+      return new Response('Not found', { status: 404 });
+    }
+
+    let input;
+    try {
+      input = await request.json();
+    } catch {
+      return new Response('Invalid request', { status: 400 });
+    }
+    const bytes = Number(input?.bytes);
+    const date = String(input?.date || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isSafeInteger(bytes) || bytes < 0 || bytes > DAILY_EGRESS_LIMIT_BYTES) {
+      return new Response('Invalid quota reservation', { status: 400 });
+    }
+
+    const result = await this.ctx.blockConcurrencyWhile(async () => {
+      const saved = await this.ctx.storage.get('daily');
+      const used = saved?.date === date && Number.isSafeInteger(saved.bytes) ? saved.bytes : 0;
+      if (used + bytes > DAILY_EGRESS_LIMIT_BYTES) {
+        return { allowed: false, remaining: 0 };
+      }
+      const next = used + bytes;
+      await this.ctx.storage.put('daily', { date, bytes: next });
+      return { allowed: true, remaining: DAILY_EGRESS_LIMIT_BYTES - next };
+    });
+
+    return Response.json(result, { status: result.allowed ? 200 : 429, headers: { 'Cache-Control': 'no-store' } });
+  }
+}
