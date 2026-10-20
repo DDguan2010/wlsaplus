@@ -1,6 +1,6 @@
 {
   "id": "vpn-daily-limit-2026-10-19",
   "title": "VPN daily limit update",
-  "content": "Some users have been consuming a very large amount of the shared VPN quota, so the shared service now has a total daily limit of 20 GB. This limit applies to subscription transfers through the relay and resets at 00:00 UTC. If it is reached, new subscription downloads may be unavailable until the next UTC day. The upstream provider's quota reset does not change this relay limit.",
+  "content": "Some users have been consuming a very large amount of the shared VPN quota, so the shared service now has a total daily limit of 5 GB. This limit applies to subscription transfers through the relay and resets at 00:00 UTC. If it is reached, new subscription downloads may be unavailable until the next UTC day. The upstream provider's quota reset does not change this relay limit.",
   "type": "warning"
 }

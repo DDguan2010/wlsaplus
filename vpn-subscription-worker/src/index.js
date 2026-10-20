@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 
 const ALLOWED_FORMATS = new Set(['clash', 'ss']);
-export const DAILY_EGRESS_LIMIT_BYTES = 20_000_000_000;
+export const DAILY_EGRESS_LIMIT_BYTES = 5_000_000_000;
 const QUOTA_KEY = 'global';
 const DEFAULT_ALLOWED_ORIGINS = new Set([
   'https://wlsaplus.02studio.xyz',
