@@ -1,5 +1,5 @@
+import { I18nService, TranslatePipe, LocalizedDatePipe } from '../core/i18n.service';
 import { Component, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { ActivatedRoute } from '@angular/router';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -13,37 +13,37 @@ import type { TaskDialogResult } from '../shared/text-dialog.component';
 import { RoomMapDirective } from '../shared/room-map.directive';
 
 @Component({
-  selector: 'app-widget-page', imports: [DatePipe, CdkDrag, CdkDragHandle, CdkDropList, MatDialogModule, MatTooltipModule, RoomMapDirective],
+  selector: 'app-widget-page', imports: [TranslatePipe, LocalizedDatePipe, CdkDrag, CdkDragHandle, CdkDropList, MatDialogModule, MatTooltipModule, RoomMapDirective],
   template: `
     <main class="widget">
-      <header><span class="widget-brand"><img src="icons/app-icon.svg" alt=""><strong>WLSAPlus</strong></span><span class="window-actions"><button (click)="closeAll()" aria-label="Close all desktop cards" matTooltip="Close all cards"><span class="material-symbols-rounded">select_window_off</span></button><button (click)="close()" aria-label="Close this desktop card" matTooltip="Close this card"><span class="material-symbols-rounded">close</span></button></span></header>
+      <header><span class="widget-brand"><img src="icons/app-icon.svg" alt=""><strong>WLSAPlus</strong></span><span class="window-actions"><button (click)="closeAll()" [attr.aria-label]="'Close all desktop cards' | t" [matTooltip]="'Close all cards' | t"><span class="material-symbols-rounded">select_window_off</span></button><button (click)="close()" [attr.aria-label]="'Close this desktop card' | t" [matTooltip]="'Close this card' | t"><span class="material-symbols-rounded">close</span></button></span></header>
       <section class="content">
         @if (type() === 'todo') {
-          <div class="title-row"><div><div class="status">TASKS</div><h1>To do</h1></div><strong class="count">{{ store.todos().length }}</strong></div>
+          <div class="title-row"><div><div class="status">{{ 'TASKS' | t }}</div><h1>{{ 'To do' | t }}</h1></div><strong class="count">{{ store.todos().length }}</strong></div>
           <div class="widget-todos" cdkDropList cdkDropListLockAxis="y" [cdkDropListData]="store.todos()" [cdkDropListDisabled]="store.todos().length < 2" (cdkDropListDropped)="reorderTodos($event)">
             @for (todo of store.todos(); track todo.id) {
               <div class="todo" cdkDrag cdkDragLockAxis="y" [cdkDragData]="todo" [class.expanded]="expandedTodoId() === todo.id" [attr.data-task-color]="todo.color">
-                <button class="todo-drag-handle" type="button" cdkDragHandle [attr.aria-label]="'Drag to reorder ' + todo.title" matTooltip="Reorder task"><span class="material-symbols-rounded">drag_indicator</span></button>
-                <button class="todo-circle" (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"></button>
-                <div class="todo-main"><button class="todo-copy" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id"><span class="todo-title">@if (todo.icon) { <span class="todo-task-icon material-symbols-rounded">{{ todo.icon }}</span> }<strong>{{ todo.title }}</strong></span>@if (expandedTodoId() === todo.id) { <span class="todo-details">{{ todo.details || 'No additional information.' }}</span> }</button>@if (todo.endAt) { @if (todo.timeType === 'deadline') { <div class="todo-deadline" [class.overdue]="todoProgress(todo) >= 100"><div class="deadline-track"><span [style.width.%]="todoProgress(todo)"></span></div><time>Due {{ todo.endAt | date:'MMM d, HH:mm' }}</time></div> } @else { <div class="todo-time"><span class="material-symbols-rounded">calendar_clock</span><time>{{ todo.endAt | date:'MMM d · HH:mm' }}</time></div> } }</div>
-                <div class="todo-actions"><button (click)="editTodo(todo)" [attr.aria-label]="'Edit ' + todo.title"><span class="material-symbols-rounded">edit</span></button><button (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"><span class="material-symbols-rounded">delete</span></button></div>
-                <time>{{ todo.createdAt | date:'MMM d' }}</time>
+                <button class="todo-drag-handle" type="button" cdkDragHandle [attr.aria-label]="'Drag to reorder {title}' | t:{title: todo.title}" [matTooltip]="'Reorder task' | t"><span class="material-symbols-rounded">drag_indicator</span></button>
+                <button class="todo-circle" (click)="deleteTodo(todo)" [attr.aria-label]="'Delete {title}' | t:{title: todo.title}"></button>
+                <div class="todo-main"><button class="todo-copy" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id"><span class="todo-title">@if (todo.icon) { <span class="todo-task-icon material-symbols-rounded">{{ todo.icon }}</span> }<strong>{{ todo.title }}</strong></span>@if (expandedTodoId() === todo.id) { <span class="todo-details">{{ todo.details || ('No additional information.' | t) }}</span> }</button>@if (todo.endAt) { @if (todo.timeType === 'deadline') { <div class="todo-deadline" [class.overdue]="todoProgress(todo) >= 100"><div class="deadline-track"><span [style.width.%]="todoProgress(todo)"></span></div><time>{{ 'Due {p0}' | t:{p0: (todo.endAt | appDate:'MMM d, HH:mm')} }}</time></div> } @else { <div class="todo-time"><span class="material-symbols-rounded">calendar_clock</span><time>{{ todo.endAt | appDate:'MMM d · HH:mm' }}</time></div> } }</div>
+                <div class="todo-actions"><button (click)="editTodo(todo)" [attr.aria-label]="'Edit {title}' | t:{title: todo.title}"><span class="material-symbols-rounded">edit</span></button><button (click)="deleteTodo(todo)" [attr.aria-label]="'Delete {title}' | t:{title: todo.title}"><span class="material-symbols-rounded">delete</span></button></div>
+                <time>{{ todo.createdAt | appDate:'MMM d' }}</time>
               </div>
-            } @empty { <p class="muted">Nothing to do.</p> }
+            } @empty { <p class="muted">{{ 'Nothing to do.' | t }}</p> }
           </div>
         } @else if (type() === 'today') {
-          <div class="title-row"><div><div class="status">{{ clock.now() | date:'EEEE' }}</div><h1>Today's classes</h1></div><strong class="count">{{ today().length }}</strong></div>
-          @for (session of today(); track session.id) { <div class="row"><time><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></time><div><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher TBA' }} · <button [appRoomMap]="session.room">{{ session.room || 'Room TBA' }}</button></span></div></div> } @empty { <p class="muted">No classes today.</p> }
+          <div class="title-row"><div><div class="status">{{ clock.now() | appDate:'EEEE' }}</div><h1>{{ 'Today\'s classes' | t }}</h1></div><strong class="count">{{ today().length }}</strong></div>
+          @for (session of today(); track session.id) { <div class="row"><time><strong>{{ session.startsAt | appDate:'HH:mm' }}</strong><span>{{ session.endsAt | appDate:'HH:mm' }}</span></time><div><strong>{{ session.courseName }}</strong><span>{{ session.teacher || ('Teacher TBA' | t) }} · <button [appRoomMap]="session.room">{{ session.room || ('Room TBA' | t) }}</button></span></div></div> } @empty { <p class="muted">{{ 'No classes today.' | t }}</p> }
         } @else {
-          <div class="status-line"><span class="status">{{ type() === 'next-class' ? 'UP NEXT' : current() ? 'IN CLASS' : 'UP NEXT' }}</span><time>{{ clock.now() | date:'EEE, MMM d · HH:mm' }}</time></div>
+          <div class="status-line"><span class="status">{{ type() === 'next-class' ? ('UP NEXT' | t) : current() ? ('IN CLASS' | t) : ('UP NEXT' | t) }}</span><time>{{ clock.now() | appDate:'EEE, MMM d · HH:mm' }}</time></div>
           @if (displayed(); as session) {
             <h1>{{ session.courseName }}</h1>
-            <div class="time">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</div>
-            <div class="details"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher TBA' }}</span><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'Room TBA' }}</button></div>
+            <div class="time">{{ session.startsAt | appDate:'HH:mm' }} - {{ session.endsAt | appDate:'HH:mm' }}</div>
+            <div class="details"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || ('Teacher TBA' | t) }}</span><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || ('Room TBA' | t) }}</button></div>
             <div class="progress"><span [style.width.%]="progress()"></span></div>
-            <div class="metrics"><div><strong>{{ countdown() }}</strong><span>{{ current() === session ? 'remaining' : 'until start' }}</span></div><div><strong>{{ duration() }} min</strong><span>duration</span></div></div>
-            @if (following(); as nextSession) { <div class="next"><span>After this</span><strong>{{ nextSession.courseName }}</strong><time>{{ nextSession.startsAt | date:'HH:mm' }}</time></div> }
-          } @else { <h1>No classes</h1><p class="muted">Your schedule is clear.</p> }
+            <div class="metrics"><div><strong>{{ countdown() }}</strong><span>{{ current() === session ? ('remaining' | t) : ('until start' | t) }}</span></div><div><strong>{{ '{p0} min' | t:{p0: (duration())} }}</strong><span>{{ 'duration' | t }}</span></div></div>
+            @if (following(); as nextSession) { <div class="next"><span>{{ 'After this' | t }}</span><strong>{{ nextSession.courseName }}</strong><time>{{ nextSession.startsAt | appDate:'HH:mm' }}</time></div> }
+          } @else { <h1>{{ 'No classes' | t }}</h1><p class="muted">{{ 'Your schedule is clear.' | t }}</p> }
         }
       </section>
       <span class="resize-grip material-symbols-rounded">drag_indicator</span>
@@ -67,6 +67,7 @@ import { RoomMapDirective } from '../shared/room-map.directive';
   `,
 })
 export class WidgetPage {
+  readonly i18n = inject(I18nService);
   readonly store = inject(LocalStore); readonly clock = inject(ClockService); private readonly route = inject(ActivatedRoute); private readonly dialog = inject(MatDialog);
   readonly expandedTodoId = signal<string | null>(null);
   readonly type = computed(() => this.route.snapshot.paramMap.get('type') ?? 'current-class');
@@ -81,9 +82,9 @@ export class WidgetPage {
     return Math.min(100, Math.max(0, (this.clock.now().getTime() - new Date(session.startsAt).getTime()) / (new Date(session.endsAt).getTime() - new Date(session.startsAt).getTime()) * 100));
   });
   readonly countdown = computed(() => {
-    const session = this.displayed(); if (!session) return '0 min';
+    const session = this.displayed(); if (!session) return this.i18n.t('{minutes} min', { minutes: 0 });
     const target = this.current() === session ? new Date(session.endsAt) : new Date(session.startsAt);
-    return `${Math.max(0, Math.ceil((target.getTime() - this.clock.now().getTime()) / 60_000))} min`;
+    return this.i18n.t('{minutes} min', { minutes: Math.max(0, Math.ceil((target.getTime() - this.clock.now().getTime()) / 60_000)) });
   });
   readonly today = computed(() => { const key = this.clock.now().toLocaleDateString('en-CA'); return this.store.schedule().sessions.filter((s) => s.startsAt.slice(0,10) === key); });
   toggleTodo(id: string): void { this.expandedTodoId.update((current) => current === id ? null : id); }

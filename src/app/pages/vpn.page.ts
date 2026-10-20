@@ -1,6 +1,6 @@
+import { TranslatePipe, LocalizedDatePipe } from '../core/i18n.service';
 import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
-import { DatePipe } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { PlatformService } from '../core/platform.service';
@@ -8,28 +8,28 @@ import { VpnService } from '../core/vpn.service';
 
 @Component({
   selector: 'app-vpn-page',
-  imports: [DatePipe, RouterLink, MatButtonModule, MatProgressSpinnerModule],
+  imports: [TranslatePipe, LocalizedDatePipe, RouterLink, MatButtonModule, MatProgressSpinnerModule],
   template: `
     <div class="page tool-page">
-      <header class="page-header"><a class="back icon-button" routerLink="/tools" aria-label="Back to tools"><span class="material-symbols-rounded">arrow_back</span></a><div><h1 class="page-title">VPN</h1><span>WLSAPlus relay</span></div><span class="spacer"></span><a mat-stroked-button class="guide-link" [href]="guideUrl" target="_blank" rel="noopener noreferrer" (click)="openGuide($event)"><span class="material-symbols-rounded">help</span>How to use</a></header>
+      <header class="page-header"><a class="back icon-button" routerLink="/tools" [attr.aria-label]="'Back to tools' | t"><span class="material-symbols-rounded">arrow_back</span></a><div><h1 class="page-title">VPN</h1><span>{{ 'WLSAPlus relay' | t }}</span></div><span class="spacer"></span><a mat-stroked-button class="guide-link" [href]="guideUrl" target="_blank" rel="noopener noreferrer" (click)="openGuide($event)"><span class="material-symbols-rounded">help</span>{{ 'How to use' | t }}</a></header>
       @if (platform.info.kind === 'electron' && (platform.info.os === 'windows' || platform.info.os === 'macos')) {
-        <div class="mode-row"><span class="material-symbols-rounded">devices</span>Full device tunnel</div>
+        <div class="mode-row"><span class="material-symbols-rounded">devices</span>{{ 'Full device tunnel' | t }}</div>
       }
       <section class="vpn-panel surface" [class.connected]="status().state === 'connected'">
         <div class="status-mark"><span class="material-symbols-rounded">{{ statusIcon() }}</span></div>
-        <div class="status-copy"><span>{{ statusLabel() }}</span><h2>{{ status().message }}</h2>@if (status().connectedAt) { <time>Connected {{ status().connectedAt | date:'HH:mm' }}</time> }</div>
+        <div class="status-copy"><span>{{ (statusLabel() | t) }}</span><h2>{{ (status().message | t) }}</h2>@if (status().connectedAt) { <time>{{ 'Connected {p0}' | t:{p0: (status().connectedAt | appDate:'HH:mm')} }}</time> }</div>
         @if (busy()) { <mat-spinner diameter="42"></mat-spinner> }
-        @else if (status().state === 'connected') { <button mat-stroked-button (click)="vpn.disconnect()">Disconnect</button> }
-        @else if (status().requiresElevation) { <button mat-flat-button (click)="vpn.restartElevated()">Restart as administrator</button> }
-        @else { <button mat-flat-button (click)="vpn.connect()" [disabled]="status().state === 'unavailable'">{{ platform.info.kind === 'android' ? 'Open VPN client' : 'Connect' }}</button> }
+        @else if (status().state === 'connected') { <button mat-stroked-button (click)="vpn.disconnect()">{{ 'Disconnect' | t }}</button> }
+        @else if (status().requiresElevation) { <button mat-flat-button (click)="vpn.restartElevated()">{{ 'Restart as administrator' | t }}</button> }
+        @else { <button mat-flat-button (click)="vpn.connect()" [disabled]="status().state === 'unavailable'">{{ platform.info.kind === 'android' ? ('Open VPN client' | t) : ('Connect' | t) }}</button> }
       </section>
       @if (platform.info.os === 'windows' || platform.info.os === 'macos') {
-        <div class="facts"><span><span class="material-symbols-rounded">shield</span>Encrypted connection</span><span><span class="material-symbols-rounded">device_hub</span>TCP and UDP</span><span><span class="material-symbols-rounded">dns</span>Tunneled DNS</span></div>
+        <div class="facts"><span><span class="material-symbols-rounded">shield</span>{{ 'Encrypted connection' | t }}</span><span><span class="material-symbols-rounded">device_hub</span>{{ 'TCP and UDP' | t }}</span><span><span class="material-symbols-rounded">dns</span>{{ 'Tunneled DNS' | t }}</span></div>
       } @else {
-        <div class="facts"><span><span class="material-symbols-rounded">shield</span>Encrypted connection</span><span><span class="material-symbols-rounded">public</span>VPN client</span><span><span class="material-symbols-rounded">sync</span>Automatic subscription</span></div>
+        <div class="facts"><span><span class="material-symbols-rounded">shield</span>{{ 'Encrypted connection' | t }}</span><span><span class="material-symbols-rounded">public</span>{{ 'VPN client' | t }}</span><span><span class="material-symbols-rounded">sync</span>{{ 'Automatic subscription' | t }}</span></div>
       }
-      @if (platform.info.kind === 'android') { <p class="platform-note">Android opens the WLSAPlus relay in an installed Clash-compatible client.</p> }
-      @if (platform.info.kind === 'web') { <p class="platform-note">Install the Windows, macOS, or Android app to use VPN.</p> }
+      @if (platform.info.kind === 'android') { <p class="platform-note">{{ 'Android opens the WLSAPlus relay in an installed Clash-compatible client.' | t }}</p> }
+      @if (platform.info.kind === 'web') { <p class="platform-note">{{ 'Install the Windows, macOS, or Android app to use VPN.' | t }}</p> }
     </div>
   `,
   styles: `

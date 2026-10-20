@@ -1,4 +1,4 @@
-import { DatePipe } from '@angular/common';
+import { I18nService, TranslatePipe, LocalizedDatePipe } from '../core/i18n.service';
 import { Component, computed, inject, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
@@ -10,54 +10,54 @@ import { PowerSchoolService } from '../core/powerschool.service';
 
 @Component({
   selector: 'app-progress-page',
-  imports: [DatePipe, MatButtonModule, MatButtonToggleModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [TranslatePipe, LocalizedDatePipe, MatButtonModule, MatButtonToggleModule, MatProgressSpinnerModule, MatTooltipModule],
   template: `
     <div class="page">
       <header class="page-header">
         <div>
-          <h1 class="page-title">Progress</h1>
+          <h1 class="page-title">{{ 'Progress' | t }}</h1>
           @if (store.progress().syncedAt) {
-            <span class="sync-label">Updated {{ store.progress().syncedAt | date:'MMM d, HH:mm' }}</span>
+            <span class="sync-label">{{ 'Updated {p0}' | t:{p0: (store.progress().syncedAt | appDate:'MMM d, HH:mm')} }}</span>
           }
         </div>
-        <button mat-icon-button class="refresh-button" (click)="refresh()" [disabled]="refreshing()" matTooltip="Refresh grades and attendance" aria-label="Refresh grades and attendance">
+        <button mat-icon-button class="refresh-button" (click)="refresh()" [disabled]="refreshing()" [matTooltip]="'Refresh grades and attendance' | t" [attr.aria-label]="'Refresh grades and attendance' | t">
           <span class="material-symbols-rounded" [class.spinning]="refreshing()">refresh</span>
         </button>
       </header>
 
       @if (refreshError()) {
-        <div class="error-banner" role="alert"><span class="material-symbols-rounded">error</span><span>{{ refreshError() }}</span><button mat-button (click)="refresh()">Try again</button></div>
+        <div class="error-banner" role="alert"><span class="material-symbols-rounded">error</span><span>{{ (refreshError() | t) }}</span><button mat-button (click)="refresh()">{{ 'Try again' | t }}</button></div>
       }
 
-      <mat-button-toggle-group class="view-switch" [value]="view()" (change)="view.set($event.value)" aria-label="Progress view">
-        <mat-button-toggle value="grades"><span class="material-symbols-rounded">school</span>Grades</mat-button-toggle>
-        <mat-button-toggle value="attendance"><span class="material-symbols-rounded">fact_check</span>Attendance</mat-button-toggle>
+      <mat-button-toggle-group class="view-switch" [value]="view()" (change)="view.set($event.value)" [attr.aria-label]="'Progress view' | t">
+        <mat-button-toggle value="grades"><span class="material-symbols-rounded">school</span>{{ 'Grades' | t }}</mat-button-toggle>
+        <mat-button-toggle value="attendance"><span class="material-symbols-rounded">fact_check</span>{{ 'Attendance' | t }}</mat-button-toggle>
       </mat-button-toggle-group>
 
-      <section class="summary-band surface" aria-label="Academic summary">
-        <div><span class="summary-icon material-symbols-rounded">menu_book</span><p><strong>{{ store.progress().courses.length }}</strong><span>Courses</span></p></div>
-        <div><span class="summary-icon absence material-symbols-rounded">event_busy</span><p><strong>{{ valueOrDash(store.progress().absenceTotal) }}</strong><span>Absences</span></p></div>
-        <div><span class="summary-icon tardy material-symbols-rounded">schedule</span><p><strong>{{ valueOrDash(store.progress().tardyTotal) }}</strong><span>Tardies</span></p></div>
+      <section class="summary-band surface" [attr.aria-label]="'Academic summary' | t">
+        <div><span class="summary-icon material-symbols-rounded">menu_book</span><p><strong>{{ store.progress().courses.length }}</strong><span>{{ 'Courses' | t }}</span></p></div>
+        <div><span class="summary-icon absence material-symbols-rounded">event_busy</span><p><strong>{{ valueOrDash(store.progress().absenceTotal) }}</strong><span>{{ 'Absences' | t }}</span></p></div>
+        <div><span class="summary-icon tardy material-symbols-rounded">schedule</span><p><strong>{{ valueOrDash(store.progress().tardyTotal) }}</strong><span>{{ 'Tardies' | t }}</span></p></div>
       </section>
 
       @if (view() === 'grades') {
         <div class="section-heading">
-          <div><h2>Course grades</h2><span>{{ store.progress().term || 'Current term' }}</span></div>
+          <div><h2>{{ 'Course grades' | t }}</h2><span>{{ store.progress().term || ('Current term' | t) }}</span></div>
         </div>
         <section class="course-list surface">
           @for (course of store.progress().courses; track course.id) {
             <article class="course-item" [class.expanded]="selectedCourseId() === course.id">
               <button class="course-toggle" (click)="toggleCourse(course)" [attr.aria-expanded]="selectedCourseId() === course.id">
                 <span class="course-icon">{{ initials(course.name) }}</span>
-                <span class="course-copy"><strong>{{ course.name }}</strong><span>{{ course.teacher || 'Teacher unavailable' }} @if (course.room) { | Room {{ course.room }} }</span></span>
+                <span class="course-copy"><strong>{{ course.name }}</strong><span>{{ course.teacher || ('Teacher unavailable' | t) }} @if (course.room) { {{ '| Room {p0}' | t:{p0: (course.room)} }}}</span></span>
                 <span class="course-results">
                   <span class="course-term-results">
                     @for (term of courseTerms(course); track term.term + term.detailsPath) {
-                      <span><small>{{ term.term || 'Grade' }}</small><strong [class.unposted]="!term.grade">{{ term.grade || 'Not posted' }}</strong></span>
+                      <span><small>{{ term.term || ('Grade' | t) }}</small><strong [class.unposted]="!term.grade">{{ term.grade || ('Not posted' | t) }}</strong></span>
                     }
                   </span>
-                  <span><small>Absent</small><strong>{{ valueOrDash(course.absences) }}</strong></span>
-                  <span><small>Tardy</small><strong>{{ valueOrDash(course.tardies) }}</strong></span>
+                  <span><small>{{ 'Absent' | t }}</small><strong>{{ valueOrDash(course.absences) }}</strong></span>
+                  <span><small>{{ 'Tardy' | t }}</small><strong>{{ valueOrDash(course.tardies) }}</strong></span>
                 </span>
                 <span class="expand-icon material-symbols-rounded">{{ selectedCourseId() === course.id ? 'expand_less' : 'expand_more' }}</span>
               </button>
@@ -65,47 +65,47 @@ import { PowerSchoolService } from '../core/powerschool.service';
               @if (selectedCourseId() === course.id) {
                 <div class="course-detail">
                   @if (loadingCourseId() === course.id) {
-                    <div class="detail-loading"><mat-spinner diameter="28"/><span>Loading assignments...</span></div>
+                    <div class="detail-loading"><mat-spinner diameter="28"/><span>{{ 'Loading assignments...' | t }}</span></div>
                   } @else if (courseError()) {
-                    <div class="detail-error" role="alert"><span>{{ courseError() }}</span><button mat-stroked-button (click)="reloadCourse(course)">Try again</button></div>
+                    <div class="detail-error" role="alert"><span>{{ (courseError() | t) }}</span><button mat-stroked-button (click)="reloadCourse(course)">{{ 'Try again' | t }}</button></div>
                   } @else {
                     <div class="course-facts">
                       @if (course.meetingPattern) { <span><span class="material-symbols-rounded">calendar_today</span>{{ course.meetingPattern }}</span> }
-                      @if (course.room) { <span><span class="material-symbols-rounded">location_on</span>Room {{ course.room }}</span> }
+                      @if (course.room) { <span><span class="material-symbols-rounded">location_on</span>{{ 'Room {p0}' | t:{p0: (course.room)} }}</span> }
                     </div>
                     @for (term of courseTerms(course); track term.term + term.detailsPath) {
                       <section class="term-detail">
-                        <div class="term-heading"><h3>{{ term.term || 'Grade details' }}</h3><span>{{ term.grade || 'Not posted' }}</span></div>
+                        <div class="term-heading"><h3>{{ term.term || ('Grade details' | t) }}</h3><span>{{ term.grade || ('Not posted' | t) }}</span></div>
                         @if (term.details; as details) {
                           @if (details.teacherComment) {
-                            <section class="detail-note"><h4>Teacher comment</h4><p>{{ details.teacherComment }}</p></section>
+                            <section class="detail-note"><h4>{{ 'Teacher comment' | t }}</h4><p>{{ details.teacherComment }}</p></section>
                           }
                           @if (details.description) {
-                            <section class="detail-note"><h4>Course description</h4><p>{{ details.description }}</p></section>
+                            <section class="detail-note"><h4>{{ 'Course description' | t }}</h4><p>{{ details.description }}</p></section>
                           }
-                          <div class="assignments-heading"><h4>Assignments</h4><span>{{ details.assignments.length }}</span></div>
+                          <div class="assignments-heading"><h4>{{ 'Assignments' | t }}</h4><span>{{ details.assignments.length }}</span></div>
                           <div class="assignment-list">
                             @for (assignment of details.assignments; track assignment.id) {
                               <article class="assignment-row">
                                 <div class="assignment-main">
                                   <strong>{{ assignment.name }}</strong>
-                                  <span>@if (assignment.dueDate) { Due {{ dateValue(assignment.dueDate) | date:'MMM d' }} } @if (assignment.category) { | {{ assignment.category }} }</span>
+                                  <span>@if (assignment.dueDate) { {{ 'Due {p0}' | t:{p0: (dateValue(assignment.dueDate) | appDate:'MMM d')} }}} @if (assignment.category) { | {{ assignment.category }} }</span>
                                   @if (assignment.description) { <p>{{ assignment.description }}</p> }
                                   @if (assignmentFlags(assignment).length) {
-                                    <div class="status-list">@for (flag of assignmentFlags(assignment); track flag) { <span>{{ flag }}</span> }</div>
+                                    <div class="status-list">@for (flag of assignmentFlags(assignment); track flag) { <span>{{ (flag | t) }}</span> }</div>
                                   }
                                 </div>
                                 <div class="assignment-score" [class.no-score]="scoreText(assignment) === 'Not scored'">
-                                  <strong>{{ scoreText(assignment) }}</strong>
+                                  <strong>{{ scoreText(assignment) | t }}</strong>
                                   @if (pointsText(assignment)) { <span>{{ pointsText(assignment) }}</span> }
                                 </div>
                               </article>
                             } @empty {
-                              <div class="empty-state compact"><div><span class="material-symbols-rounded">assignment</span><p>No assignments have been posted for this term.</p></div></div>
+                              <div class="empty-state compact"><div><span class="material-symbols-rounded">assignment</span><p>{{ 'No assignments have been posted for this term.' | t }}</p></div></div>
                             }
                           </div>
                         } @else {
-                          <p class="term-unavailable">Details are not available for this term yet.</p>
+                          <p class="term-unavailable">{{ 'Details are not available for this term yet.' | t }}</p>
                         }
                       </section>
                     }
@@ -114,35 +114,35 @@ import { PowerSchoolService } from '../core/powerschool.service';
               }
             </article>
           } @empty {
-            <div class="empty-state"><div><span class="material-symbols-rounded">school</span><p>No course grades are available yet.</p><button mat-stroked-button (click)="refresh()">Refresh</button></div></div>
+            <div class="empty-state"><div><span class="material-symbols-rounded">school</span><p>{{ 'No course grades are available yet.' | t }}</p><button mat-stroked-button (click)="refresh()">{{ 'Refresh' | t }}</button></div></div>
           }
         </section>
       } @else {
         <div class="attendance-controls">
-          <mat-button-toggle-group [value]="attendanceFilter()" (change)="attendanceFilter.set($event.value)" aria-label="Attendance status filter">
-            <mat-button-toggle value="all">All</mat-button-toggle>
-            <mat-button-toggle value="absence">Absences</mat-button-toggle>
-            <mat-button-toggle value="tardy">Tardies</mat-button-toggle>
+          <mat-button-toggle-group [value]="attendanceFilter()" (change)="attendanceFilter.set($event.value)" [attr.aria-label]="'Attendance status filter' | t">
+            <mat-button-toggle value="all">{{ 'All' | t }}</mat-button-toggle>
+            <mat-button-toggle value="absence">{{ 'Absences' | t }}</mat-button-toggle>
+            <mat-button-toggle value="tardy">{{ 'Tardies' | t }}</mat-button-toggle>
           </mat-button-toggle-group>
-          <label class="course-filter"><span class="screen-reader-only">Filter attendance by course</span><select [value]="attendanceCourse()" (change)="setAttendanceCourse($event)">
-            <option value="all">All courses</option>
+          <label class="course-filter"><span class="screen-reader-only">{{ 'Filter attendance by course' | t }}</span><select [value]="attendanceCourse()" (change)="setAttendanceCourse($event)">
+            <option value="all">{{ 'All courses' | t }}</option>
             @for (name of attendanceCourses(); track name) { <option [value]="name">{{ name }}</option> }
           </select><span class="material-symbols-rounded">expand_more</span></label>
         </div>
 
         <div class="section-heading attendance-heading">
-          <div><h2>Attendance history</h2><span>@if (store.progress().attendanceStart) { {{ dateValue(store.progress().attendanceStart) | date:'MMM d' }} to {{ dateValue(store.progress().attendanceEnd) | date:'MMM d' }} } @else { {{ store.progress().term || 'Current term' }} }</span></div>
+          <div><h2>{{ 'Attendance history' | t }}</h2><span>@if (store.progress().attendanceStart) { {{ '{p0} to {p1}' | t:{p0: (dateValue(store.progress().attendanceStart) | appDate:'MMM d'), p1: (dateValue(store.progress().attendanceEnd) | appDate:'MMM d')} }}} @else { {{ store.progress().term || ('Current term' | t) }} }</span></div>
         </div>
         <section class="attendance-list surface">
           @for (event of filteredAttendance(); track event.id) {
             <article class="attendance-row">
-              <time><strong>{{ dateValue(event.date) | date:'d' }}</strong><span>{{ dateValue(event.date) | date:'MMM' }}</span></time>
+              <time><strong>{{ dateValue(event.date) | appDate:'d' }}</strong><span>{{ dateValue(event.date) | appDate:'MMM' }}</span></time>
               <span class="event-icon material-symbols-rounded" [attr.data-kind]="event.kind">{{ eventIcon(event) }}</span>
-              <div class="event-main"><strong>{{ event.courseName }}</strong><span>{{ event.meetingPattern || 'Meeting time unavailable' }}</span></div>
-              <div class="event-status" [attr.data-kind]="event.kind"><strong>{{ event.label }}</strong>@if (event.count > 1) { <span>{{ event.count }} records</span> }</div>
+              <div class="event-main"><strong>{{ event.courseName }}</strong><span>{{ event.meetingPattern || ('Meeting time unavailable' | t) }}</span></div>
+              <div class="event-status" [attr.data-kind]="event.kind"><strong>{{ event.kind === 'absence' ? ('Absent' | t) : event.kind === 'tardy' ? ('Tardy' | t) : event.label }}</strong>@if (event.count > 1) { <span>{{ '{p0} records' | t:{p0: (event.count)} }}</span> }</div>
             </article>
           } @empty {
-            <div class="empty-state attendance-empty"><div><span class="material-symbols-rounded">event_available</span><h3>No attendance records</h3><p>{{ attendanceEmptyMessage() }}</p></div></div>
+            <div class="empty-state attendance-empty"><div><span class="material-symbols-rounded">event_available</span><h3>{{ 'No attendance records' | t }}</h3><p>{{ (attendanceEmptyMessage() | t) }}</p></div></div>
           }
         </section>
       }
@@ -203,6 +203,7 @@ import { PowerSchoolService } from '../core/powerschool.service';
   `,
 })
 export class ProgressPage {
+  readonly i18n = inject(I18nService);
   readonly store = inject(LocalStore);
   private readonly powerSchool = inject(PowerSchoolService);
   readonly view = signal<'grades' | 'attendance'>('grades');
@@ -276,7 +277,7 @@ export class ProgressPage {
   }
   pointsText(assignment: AssignmentScore): string {
     if (assignment.pointsEarned === null && assignment.pointsPossible === null) return '';
-    return `${assignment.pointsEarned ?? '-'} / ${assignment.pointsPossible ?? '-'} pts`;
+    return this.i18n.t('{earned} / {possible} pts', { earned: assignment.pointsEarned ?? '-', possible: assignment.pointsPossible ?? '-' });
   }
   eventIcon(event: AttendanceEvent): string {
     return event.kind === 'absence' ? 'event_busy' : event.kind === 'tardy' ? 'schedule' : 'info';

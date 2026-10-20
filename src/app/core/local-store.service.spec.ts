@@ -19,7 +19,7 @@ describe('LocalStore', () => {
       courses: [],
     };
     const todos: TodoItem[] = [{ id: 'todo-1', title: 'Submit essay', details: 'Upload the final PDF.', createdAt: '2026-08-29T08:00:00.000Z', endAt: null, color: 'blue', icon: 'assignment', timeType: 'time' }];
-    const settings: AppSettings = { theme: 'dark', color: 'green', tuningEnabled: true, tunedTime: '2026-08-24T08:05:00.000Z' };
+    const settings: AppSettings = { language: 'zh-CN', theme: 'dark', color: 'green', tuningEnabled: true, tunedTime: '2026-08-24T08:05:00.000Z' };
 
     window.dispatchEvent(new StorageEvent('storage', { key: 'wlsaplus:schedule', newValue: JSON.stringify(schedule), storageArea: localStorage }));
     window.dispatchEvent(new StorageEvent('storage', { key: 'wlsaplus:todos', newValue: JSON.stringify(todos), storageArea: localStorage }));
@@ -30,12 +30,34 @@ describe('LocalStore', () => {
     expect(store.settings()).toEqual(settings);
     expect(document.documentElement.classList.contains('dark-theme')).toBe(true);
     expect(document.documentElement.dataset['appColor']).toBe('green');
+    expect(document.documentElement.lang).toBe('zh-CN');
   });
 
   it('migrates existing appearance settings to the default app color', () => {
     localStorage.setItem('wlsaplus:settings', JSON.stringify({ theme: 'light', tuningEnabled: false, tunedTime: null }));
 
-    expect(new LocalStore().settings()).toEqual({ theme: 'light', color: 'default', tuningEnabled: false, tunedTime: null });
+    expect(new LocalStore().settings()).toEqual({ language: 'en', theme: 'light', color: 'default', tuningEnabled: false, tunedTime: null });
+  });
+
+  it('defaults to English and safely migrates unsupported saved languages', () => {
+    expect(new LocalStore().settings().language).toBe('en');
+    for (const language of ['zh', 'fr', '', null, 1]) {
+      localStorage.setItem('wlsaplus:settings', JSON.stringify({ language, theme: 'dark', color: 'purple' }));
+      expect(new LocalStore().settings()).toMatchObject({ language: 'en', theme: 'dark', color: 'purple' });
+    }
+  });
+
+  it('persists the selected language without changing tasks or appearance', () => {
+    const store = new LocalStore();
+    store.addTodo('My assignment', 'Keep this English text.');
+    store.updateSettings({ theme: 'light', color: 'blue', language: 'zh-CN' });
+    const reloaded = new LocalStore();
+    expect(reloaded.settings()).toMatchObject({ theme: 'light', color: 'blue', language: 'zh-CN' });
+    expect(reloaded.todos()[0]).toMatchObject({ title: 'My assignment', details: 'Keep this English text.' });
+    expect(document.documentElement.lang).toBe('zh-CN');
+    reloaded.updateSettings({ language: 'en' });
+    expect(new LocalStore().settings().language).toBe('en');
+    expect(document.documentElement.lang).toBe('en');
   });
 
   it('saves and applies the selected app color', () => {

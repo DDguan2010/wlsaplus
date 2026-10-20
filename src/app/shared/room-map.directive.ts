@@ -1,3 +1,4 @@
+import { I18nService, TranslatePipe } from '../core/i18n.service';
 import { Component, Directive, computed, inject, input, signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogClose, MatDialogContent, MatDialogTitle } from '@angular/material/dialog';
 import { buildingFromRoom } from '../core/campus-map';
@@ -5,9 +6,9 @@ import { CampusMapPanelComponent } from './campus-map-panel.component';
 
 @Component({
   selector: 'app-room-map-dialog',
-  imports: [MatDialogTitle, MatDialogContent, MatDialogClose, CampusMapPanelComponent],
+  imports: [TranslatePipe, MatDialogTitle, MatDialogContent, MatDialogClose, CampusMapPanelComponent],
   template: `
-    <header><h2 mat-dialog-title>Room {{ data.room }}</h2><button type="button" mat-dialog-close aria-label="Close map"><span class="material-symbols-rounded">close</span></button></header>
+    <header><h2 mat-dialog-title>{{ 'Room {p0}' | t:{p0: (data.room)} }}</h2><button type="button" mat-dialog-close [attr.aria-label]="'Close map' | t"><span class="material-symbols-rounded">close</span></button></header>
     <mat-dialog-content><app-campus-map-panel [selectedBuilding]="selectedBuilding()" (buildingSelected)="selectedBuilding.set($event)" /></mat-dialog-content>
   `,
   styles: `
@@ -29,12 +30,13 @@ export class RoomMapDialogComponent {
     'type': 'button',
     'class': 'room-map-trigger',
     '[disabled]': 'building() === null',
-    '[attr.aria-label]': 'building() ? "Show room " + room() + " in Building " + building() + " on map" : null',
+    '[attr.aria-label]': 'building() ? i18n.t("Show room {room} in Building {building} on map", { room: room(), building: building() }) : null',
     '[attr.aria-haspopup]': 'building() ? "dialog" : null',
     '(click)': 'open($event)',
   },
 })
 export class RoomMapDirective {
+  readonly i18n = inject(I18nService);
   readonly room = input<string | null | undefined>(null, { alias: 'appRoomMap' });
   readonly building = computed(() => buildingFromRoom(this.room()));
   private readonly dialog = inject(MatDialog);
@@ -46,7 +48,7 @@ export class RoomMapDirective {
     if (building === null) return;
     this.dialog.open(RoomMapDialogComponent, {
       data: { room: this.room(), building }, width: '780px', maxWidth: 'calc(100vw - 24px)', maxHeight: 'calc(100dvh - 24px)',
-      autoFocus: 'button[aria-label="Close map"]', restoreFocus: true,
+      autoFocus: 'button[mat-dialog-close]', restoreFocus: true,
     });
   }
 }

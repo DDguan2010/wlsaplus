@@ -37,7 +37,9 @@ export interface HomeTimelineLayout {
   timeLanes: HomeTimelineEntry[][];
 }
 
-export function buildHomeTimeline(sessions: ClassSession[], todos: TodoItem[], now: number): HomeTimelineLayout {
+export function buildHomeTimeline(sessions: ClassSession[], todos: TodoItem[], now: number,
+  labels: { locale?: string; due?: string; scheduled?: string; to?: string } = {}): HomeTimelineLayout {
+  const locale = labels.locale ?? 'en';
   const endsAt = now + HOME_TIMELINE_RANGE_MS;
   const position = (value: number) => (value - now) / HOME_TIMELINE_RANGE_MS * 100;
   const scheduleEntries = sessions.flatMap((session): HomeTimelineEntry[] => {
@@ -49,7 +51,7 @@ export function buildHomeTimeline(sessions: ClassSession[], todos: TodoItem[], n
     return [{
       id: `schedule-${session.id}`,
       title: session.courseName,
-      tooltip: joinDetails(session.courseName, formatRange(sourceStart, sourceEnd), session.teacher, session.room),
+      tooltip: joinDetails(session.courseName, formatRange(sourceStart, sourceEnd, locale, labels.to ?? 'to'), session.teacher, session.room),
       kind: 'schedule',
       left: position(startsAt),
       width: position(clippedEnd) - position(startsAt),
@@ -66,7 +68,7 @@ export function buildHomeTimeline(sessions: ClassSession[], todos: TodoItem[], n
     if (!todo.endAt) continue;
     const taskTime = Date.parse(todo.endAt);
     if (!Number.isFinite(taskTime) || taskTime < now || taskTime > endsAt) continue;
-    const tooltip = joinDetails(todo.title, `${todo.timeType === 'deadline' ? 'Due' : 'Scheduled'} ${formatDateTime(taskTime)}`, todo.details);
+    const tooltip = joinDetails(todo.title, `${todo.timeType === 'deadline' ? labels.due ?? 'Due' : labels.scheduled ?? 'Scheduled'} ${formatDateTime(taskTime, locale)}`, todo.details);
     if (todo.timeType === 'deadline') {
       const createdAt = Date.parse(todo.createdAt);
       const startsAt = Number.isFinite(createdAt) && createdAt > now && createdAt < taskTime ? createdAt : now;
@@ -127,12 +129,12 @@ function stableIndex(value: string): number {
   return Math.abs(hash) % 7;
 }
 
-function formatRange(start: number, end: number): string {
-  return `${formatDateTime(start)} to ${new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' }).format(end)}`;
+function formatRange(start: number, end: number, locale: string, separator: string): string {
+  return `${formatDateTime(start, locale)} ${separator} ${new Intl.DateTimeFormat(locale, { hour: '2-digit', minute: '2-digit' }).format(end)}`;
 }
 
-function formatDateTime(value: number): string {
-  return new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(value);
+function formatDateTime(value: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(value);
 }
 
 function joinDetails(...values: (string | null | undefined)[]): string {

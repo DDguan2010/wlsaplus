@@ -1,10 +1,11 @@
-import { Component, inject } from '@angular/core';
+import { I18nService, TranslatePipe } from '../core/i18n.service';
+import { Component, effect, inject } from '@angular/core';
 import { AbstractControl, FormControl, ReactiveFormsModule, ValidationErrors, Validators } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogActions, MatDialogClose, MatDialogContent, MatDialogRef, MatDialogTitle } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
-import { provideNativeDateAdapter } from '@angular/material/core';
-import { MatDatepickerModule } from '@angular/material/datepicker';
+import { DateAdapter, provideNativeDateAdapter } from '@angular/material/core';
+import { MatDatepickerIntl, MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -38,67 +39,67 @@ function optionalTime(control: AbstractControl<string>): ValidationErrors | null
 
 @Component({
   selector: 'app-text-dialog',
-  imports: [ReactiveFormsModule, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatButtonToggleModule, MatDatepickerModule, MatFormFieldModule, MatInputModule, MatTooltipModule],
-  providers: [provideNativeDateAdapter()],
+  imports: [TranslatePipe, ReactiveFormsModule, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule, MatButtonToggleModule, MatDatepickerModule, MatFormFieldModule, MatInputModule, MatTooltipModule],
+  providers: [provideNativeDateAdapter(), MatDatepickerIntl],
   template: `
-    <h2 mat-dialog-title>{{ data?.mode === 'edit' ? 'Edit task' : 'Add a task' }}</h2>
+    <h2 mat-dialog-title>{{ data?.mode === 'edit' ? ('Edit task' | t) : ('Add a task' | t) }}</h2>
     <mat-dialog-content>
       <mat-form-field appearance="outline">
-        <mat-label>Title</mat-label>
+        <mat-label>{{ 'Title' | t }}</mat-label>
         <input matInput [formControl]="title" maxlength="120" autofocus>
         <mat-hint align="end">{{ title.value.length }}/120</mat-hint>
       </mat-form-field>
       <mat-form-field appearance="outline">
-        <mat-label>Information</mat-label>
+        <mat-label>{{ 'Information' | t }}</mat-label>
         <textarea matInput [formControl]="details" rows="5" maxlength="1000"></textarea>
         <mat-hint align="end">{{ details.value.length }}/1000</mat-hint>
       </mat-form-field>
       <div class="time-type-row">
-        <span>When</span>
-        <mat-button-toggle-group [formControl]="timeType" aria-label="Task time type">
-          <mat-button-toggle value="time"><span class="material-symbols-rounded">schedule</span>Time</mat-button-toggle>
-          <mat-button-toggle value="deadline"><span class="material-symbols-rounded">timer</span>Deadline</mat-button-toggle>
+        <span>{{ 'When' | t }}</span>
+        <mat-button-toggle-group [formControl]="timeType" [attr.aria-label]="'Task time type' | t">
+          <mat-button-toggle value="time"><span class="material-symbols-rounded">schedule</span>{{ 'Time' | t }}</mat-button-toggle>
+          <mat-button-toggle value="deadline"><span class="material-symbols-rounded">timer</span>{{ 'Deadline' | t }}</mat-button-toggle>
         </mat-button-toggle-group>
       </div>
       <div class="deadline-fields">
         <mat-form-field appearance="outline">
-          <mat-label>{{ timeType.value === 'deadline' ? 'Due date' : 'Date' }}</mat-label>
+          <mat-label>{{ timeType.value === 'deadline' ? ('Due date' | t) : ('Date' | t) }}</mat-label>
           <input matInput [matDatepicker]="endDatePicker" [formControl]="endDate" (dateChange)="ensureEndTime()">
-          <mat-datepicker-toggle matIconSuffix [for]="endDatePicker" aria-label="Open deadline calendar"></mat-datepicker-toggle>
+          <mat-datepicker-toggle matIconSuffix [for]="endDatePicker" [attr.aria-label]="'Open deadline calendar' | t"></mat-datepicker-toggle>
           <mat-datepicker #endDatePicker></mat-datepicker>
-          <mat-hint>Optional</mat-hint>
-          @if (endDate.invalid) { <mat-error>Choose a valid date.</mat-error> }
+          <mat-hint>{{ 'Optional' | t }}</mat-hint>
+          @if (endDate.invalid) { <mat-error>{{ 'Choose a valid date.' | t }}</mat-error> }
         </mat-form-field>
         <mat-form-field appearance="outline">
-          <mat-label>Time</mat-label>
+          <mat-label>{{ 'Time' | t }}</mat-label>
           <input matInput type="time" [formControl]="endTime">
-          <mat-hint>Required with a date</mat-hint>
-          @if (endTime.hasError('time')) { <mat-error>Choose a valid time.</mat-error> }
+          <mat-hint>{{ 'Required with a date' | t }}</mat-hint>
+          @if (endTime.hasError('time')) { <mat-error>{{ 'Choose a valid time.' | t }}</mat-error> }
         </mat-form-field>
       </div>
-      @if (endDate.value || endTime.value) { <button type="button" mat-button class="clear-deadline" (click)="clearDeadline()"><span class="material-symbols-rounded">event_busy</span>Clear {{ timeType.value }}</button> }
+      @if (endDate.value || endTime.value) { <button type="button" mat-button class="clear-deadline" (click)="clearDeadline()"><span class="material-symbols-rounded">event_busy</span>{{ (timeType.value === 'deadline' ? 'Clear deadline' : 'Clear time') | t }}</button> }
       <fieldset class="color-field">
-        <legend>Color <span>Optional</span></legend>
+        <legend>{{ 'Color' | t }} <span>{{ 'Optional' | t }}</span></legend>
         <div class="color-options">
-          <button type="button" class="color-swatch no-color" [class.selected]="color.value === null" [attr.aria-pressed]="color.value === null" (click)="color.setValue(null)" aria-label="No task color" matTooltip="No color"><span class="none-line"></span>@if (color.value === null) { <span class="material-symbols-rounded">check</span> }</button>
+          <button type="button" class="color-swatch no-color" [class.selected]="color.value === null" [attr.aria-pressed]="color.value === null" (click)="color.setValue(null)" [attr.aria-label]="'No task color' | t" [matTooltip]="'No color' | t"><span class="none-line"></span>@if (color.value === null) { <span class="material-symbols-rounded">check</span> }</button>
           @for (option of colorOptions; track option.value) {
-            <button type="button" class="color-swatch" [attr.data-task-color]="option.value" [class.selected]="color.value === option.value" [attr.aria-pressed]="color.value === option.value" (click)="color.setValue(option.value)" [attr.aria-label]="option.label + ' task color'" [matTooltip]="option.label">@if (color.value === option.value) { <span class="material-symbols-rounded">check</span> }</button>
+            <button type="button" class="color-swatch" [attr.data-task-color]="option.value" [class.selected]="color.value === option.value" [attr.aria-pressed]="color.value === option.value" (click)="color.setValue(option.value)" [attr.aria-label]="'{color} task color' | t:{color: (option.label | t)}" [matTooltip]="(option.label | t)">@if (color.value === option.value) { <span class="material-symbols-rounded">check</span> }</button>
           }
         </div>
       </fieldset>
       <fieldset class="icon-field">
-        <legend>Icon <span>Optional</span></legend>
+        <legend>{{ 'Icon' | t }} <span>{{ 'Optional' | t }}</span></legend>
         <div class="icon-options">
-          <button type="button" class="icon-option" [class.selected]="icon.value === null" [attr.aria-pressed]="icon.value === null" (click)="icon.setValue(null)" aria-label="No task icon" matTooltip="No icon"><span class="material-symbols-rounded">block</span></button>
+          <button type="button" class="icon-option" [class.selected]="icon.value === null" [attr.aria-pressed]="icon.value === null" (click)="icon.setValue(null)" [attr.aria-label]="'No task icon' | t" [matTooltip]="'No icon' | t"><span class="material-symbols-rounded">block</span></button>
           @for (option of iconOptions; track option.value) {
-            <button type="button" class="icon-option" [class.selected]="icon.value === option.value" [attr.aria-pressed]="icon.value === option.value" (click)="icon.setValue(option.value)" [attr.aria-label]="option.label + ' task icon'" [matTooltip]="option.label"><span class="material-symbols-rounded">{{ option.value }}</span></button>
+            <button type="button" class="icon-option" [class.selected]="icon.value === option.value" [attr.aria-pressed]="icon.value === option.value" (click)="icon.setValue(option.value)" [attr.aria-label]="'{icon} task icon' | t:{icon: (option.label | t)}" [matTooltip]="(option.label | t)"><span class="material-symbols-rounded">{{ option.value }}</span></button>
           }
         </div>
       </fieldset>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-flat-button [disabled]="title.invalid || details.invalid || !deadlineValid()" (click)="submit()">{{ data?.mode === 'edit' ? 'Save' : 'Add' }}</button>
+      <button mat-button mat-dialog-close>{{ 'Cancel' | t }}</button>
+      <button mat-flat-button [disabled]="title.invalid || details.invalid || !deadlineValid()" (click)="submit()">{{ data?.mode === 'edit' ? ('Save' | t) : ('Add' | t) }}</button>
     </mat-dialog-actions>
   `,
   styles: `
@@ -131,6 +132,23 @@ function optionalTime(control: AbstractControl<string>): ValidationErrors | null
   `,
 })
 export class TextDialogComponent {
+  readonly i18n = inject(I18nService);
+  private readonly dateAdapter = inject<DateAdapter<Date>>(DateAdapter);
+  private readonly datepickerIntl = inject(MatDatepickerIntl);
+  constructor() {
+    effect(() => {
+      this.dateAdapter.setLocale(this.i18n.locale());
+      const labels = {
+        calendarLabel: 'Open calendar', openCalendarLabel: 'Open calendar', closeCalendarLabel: 'Close calendar',
+        prevMonthLabel: 'Previous month', nextMonthLabel: 'Next month',
+        prevYearLabel: 'Previous year', nextYearLabel: 'Next year',
+        prevMultiYearLabel: 'Previous 24 years', nextMultiYearLabel: 'Next 24 years',
+        switchToMonthViewLabel: 'Switch to month view', switchToMultiYearViewLabel: 'Choose month and year',
+      };
+      Object.assign(this.datepickerIntl, Object.fromEntries(Object.entries(labels).map(([key, label]) => [key, this.i18n.t(label)])));
+      this.datepickerIntl.changes.next();
+    });
+  }
   private readonly ref = inject(MatDialogRef<TextDialogComponent>);
   readonly data = inject<TaskDialogData | null>(MAT_DIALOG_DATA, { optional: true });
   readonly title = new FormControl(this.data?.title ?? '', { nonNullable: true, validators: [Validators.required, Validators.pattern(/\S/), Validators.maxLength(120)] });
@@ -181,16 +199,16 @@ export class TextDialogComponent {
 
 @Component({
   selector: 'app-confirm-dialog',
-  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule],
+  imports: [TranslatePipe, MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose, MatButtonModule],
   template: `
-    <h2 mat-dialog-title>{{ data.title }}</h2>
-    <mat-dialog-content>{{ data.message }}</mat-dialog-content>
+    <h2 mat-dialog-title>{{ (data.title | t) }}</h2>
+    <mat-dialog-content>{{ data.messageKey ? (data.messageKey | t) : data.message }}</mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button mat-dialog-close>Cancel</button>
-      <button mat-flat-button [mat-dialog-close]="true">{{ data.action }}</button>
+      <button mat-button mat-dialog-close>{{ 'Cancel' | t }}</button>
+      <button mat-flat-button [mat-dialog-close]="true">{{ (data.action | t) }}</button>
     </mat-dialog-actions>
   `,
 })
 export class ConfirmDialogComponent {
-  readonly data = inject<{ title: string; message: string; action: string }>(MAT_DIALOG_DATA);
+  readonly data = inject<{ title: string; message?: string; messageKey?: string; action: string }>(MAT_DIALOG_DATA);
 }

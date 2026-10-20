@@ -1,34 +1,35 @@
-import { Component, ElementRef, computed, input, output, signal, viewChild } from '@angular/core';
+import { I18nService, TranslatePipe } from '../core/i18n.service';
+import { inject, Component, ElementRef, computed, input, output, signal, viewChild } from '@angular/core';
 import { CAMPUS_BUILDINGS, campusBuilding } from '../core/campus-map';
 import { CampusMapComponent } from './campus-map.component';
 
 @Component({
   selector: 'app-campus-map-panel',
-  imports: [CampusMapComponent],
+  imports: [TranslatePipe, CampusMapComponent],
   template: `
     <div class="map-toolbar">
-      <span>Tap a building to see its details</span>
-      <div class="zoom-controls" aria-label="Map zoom">
-        <button type="button" (click)="setZoom(zoom() - .5)" [disabled]="zoom() <= 1" aria-label="Zoom map out"><span class="material-symbols-rounded">remove</span></button>
-        <button class="fit" type="button" (click)="setZoom(1)" aria-label="Show whole campus">{{ zoom() === 1 ? 'Fit' : (zoom() * 100) + '%' }}</button>
-        <button type="button" (click)="setZoom(zoom() + .5)" [disabled]="zoom() >= 4" aria-label="Zoom map in"><span class="material-symbols-rounded">add</span></button>
+      <span>{{ 'Tap a building to see its details' | t }}</span>
+      <div class="zoom-controls" [attr.aria-label]="'Map zoom' | t">
+        <button type="button" (click)="setZoom(zoom() - .5)" [disabled]="zoom() <= 1" [attr.aria-label]="'Zoom map out' | t"><span class="material-symbols-rounded">remove</span></button>
+        <button class="fit" type="button" (click)="setZoom(1)" [attr.aria-label]="'Show whole campus' | t">{{ zoom() === 1 ? ('Fit' | t) : (zoom() * 100) + '%' }}</button>
+        <button type="button" (click)="setZoom(zoom() + .5)" [disabled]="zoom() >= 4" [attr.aria-label]="'Zoom map in' | t"><span class="material-symbols-rounded">add</span></button>
       </div>
     </div>
-    <div class="map-viewport" #viewport tabindex="0" aria-label="Campus map. Zoom in for detail, then scroll or swipe to move.">
+    <div class="map-viewport" #viewport tabindex="0" [attr.aria-label]="'Campus map. Zoom in for detail, then scroll or swipe to move.' | t">
       <app-campus-map [style.width.%]="zoom() * 100" [highlightedBuilding]="selectedBuilding()" (buildingSelected)="buildingSelected.emit($event)" />
     </div>
-    <div class="building-picker" aria-label="Select a campus building">
+    <div class="building-picker" [attr.aria-label]="'Select a campus building' | t">
       @for (building of buildings; track building.id) {
-        <button type="button" [class.selected]="selectedBuilding() === building.id" [attr.aria-pressed]="selectedBuilding() === building.id" [attr.aria-label]="'Building ' + building.id + ': ' + building.name" (click)="select(building.id)">{{ building.id }}</button>
+        <button type="button" [class.selected]="selectedBuilding() === building.id" [attr.aria-pressed]="selectedBuilding() === building.id" [attr.aria-label]="'Building {number}: {name}' | t:{number: building.id, name: (building.name | t)}" (click)="select(building.id)">{{ building.id }}</button>
       }
     </div>
     @if (selected(); as building) {
       <div class="building-detail" aria-live="polite">
         <span class="detail-number">{{ building.id }}</span>
-        <div><strong>Building {{ building.id }} · {{ building.name }}</strong><span class="chinese">{{ building.chinese }}</span><p>{{ building.details }}</p></div>
+        <div><strong>{{ 'Building {p0} · {p1}' | t:{p0: building.id, p1: (building.name | t)} }}</strong>@if (i18n.language() === 'en') { <span class="chinese">{{ building.chinese }}</span> }<p>{{ building.details | t }}</p></div>
       </div>
     } @else {
-      <p class="map-hint">Find a classroom by its first digit: 5218 is in Building 5. Zoom in to read the smaller labels.</p>
+      <p class="map-hint">{{ 'Find a classroom by its first digit: 5218 is in Building 5. Zoom in to read the smaller labels.' | t }}</p>
     }
   `,
   styles: `
@@ -50,6 +51,7 @@ import { CampusMapComponent } from './campus-map.component';
   `,
 })
 export class CampusMapPanelComponent {
+  readonly i18n = inject(I18nService);
   readonly selectedBuilding = input<number | null>(null);
   readonly buildingSelected = output<number>();
   readonly buildings = CAMPUS_BUILDINGS;

@@ -11,6 +11,7 @@ const EMPTY_SCHEDULE: ScheduleSnapshot = {
 };
 
 const DEFAULT_SETTINGS: AppSettings = {
+  language: 'en',
   theme: 'system',
   color: 'default',
   tuningEnabled: false,
@@ -194,6 +195,7 @@ export class LocalStore {
   }
 
   applyTheme(): void {
+    document.documentElement.lang = this.settings().language;
     const { theme: mode, color } = this.settings();
     const dark = mode === 'dark' || (mode === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
     document.documentElement.classList.toggle('dark-theme', dark);
@@ -223,6 +225,7 @@ export class LocalStore {
     if (!parsed || typeof parsed !== 'object') return { ...DEFAULT_SETTINGS };
     const value = parsed as Record<string, unknown>;
     return {
+      language: value['language'] === 'zh-CN' ? 'zh-CN' : DEFAULT_SETTINGS.language,
       theme: THEME_MODES.has(value['theme'] as ThemeMode) ? value['theme'] as ThemeMode : DEFAULT_SETTINGS.theme,
       color: APP_COLORS.has(value['color'] as AppColor) ? value['color'] as AppColor : DEFAULT_SETTINGS.color,
       tuningEnabled: typeof value['tuningEnabled'] === 'boolean' ? value['tuningEnabled'] : DEFAULT_SETTINGS.tuningEnabled,

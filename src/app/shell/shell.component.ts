@@ -1,3 +1,4 @@
+import { TranslatePipe } from '../core/i18n.service';
 import { Component, OnInit, inject } from '@angular/core';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -11,15 +12,15 @@ import { NoticeService } from '../core/notice.service';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MatButtonModule, MatTooltipModule],
+  imports: [TranslatePipe, RouterOutlet, RouterLink, RouterLinkActive, MatButtonModule, MatTooltipModule],
   template: `
     <div class="app-frame">
       <aside class="rail">
-        <a class="brand" routerLink="/" aria-label="WLSAPlus home"><img src="icons/app-icon.svg" alt=""></a>
-        <nav aria-label="Main navigation">
+        <a class="brand" routerLink="/" [attr.aria-label]="'WLSAPlus home' | t"><img src="icons/app-icon.svg" alt=""></a>
+        <nav [attr.aria-label]="'Main navigation' | t">
           @for (item of nav; track item.path) {
-            <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: item.path === '/' }" [matTooltip]="item.label" matTooltipPosition="right">
-              <span class="material-symbols-rounded">{{ item.icon }}</span><span>{{ item.label }}</span>
+            <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: item.path === '/' }" [matTooltip]="(item.label | t)" matTooltipPosition="right">
+              <span class="material-symbols-rounded">{{ item.icon }}</span><span>{{ (item.label | t) }}</span>
             </a>
           }
         </nav>
@@ -30,7 +31,7 @@ import { NoticeService } from '../core/notice.service';
           <aside class="notice-alert" role="alertdialog" aria-modal="true" aria-live="polite">
             <span class="notice-icon material-symbols-rounded">campaign</span>
             <div class="notice-copy"><strong>{{ notice.notice()?.title }}</strong><span>{{ notice.notice()?.content }}</span></div>
-            <button mat-flat-button type="button" (click)="notice.dismiss()" aria-label="Dismiss notice">Got it</button>
+            <button mat-flat-button type="button" (click)="notice.dismiss()" [attr.aria-label]="'Dismiss notice' | t">{{ 'Got it' | t }}</button>
           </aside>
         </div>
       }
@@ -38,23 +39,23 @@ import { NoticeService } from '../core/notice.service';
         <aside class="update-alert" aria-live="polite">
           <span class="update-icon material-symbols-rounded">system_update</span>
           <div class="update-copy">
-            <strong>@if (updater.status().state === 'ready') { Update ready } @else { New WLSAPlus version }</strong>
-            <span>{{ updater.status().message }}</span>
+            <strong>@if (updater.status().state === 'ready') {  {{ 'Update ready' | t }} } @else {  {{ 'New WLSAPlus version' | t }} }</strong>
+            <span>{{ (updater.status().message | t) }}</span>
             @if (updater.status().state === 'downloading') {
               <div class="progress-row"><progress [value]="updater.status().percent ?? 0" max="100"></progress><span>{{ updater.status().percent ?? 0 }}%</span></div>
             }
           </div>
           @if (updater.status().state === 'available') {
-            <button mat-flat-button (click)="updater.download()"><span class="material-symbols-rounded">download</span>Download</button>
+            <button mat-flat-button (click)="updater.download()"><span class="material-symbols-rounded">download</span>{{ 'Download' | t }}</button>
           } @else if (updater.status().state === 'ready') {
-            <button mat-flat-button (click)="updater.install()"><span class="material-symbols-rounded">restart_alt</span>Restart</button>
+            <button mat-flat-button (click)="updater.install()"><span class="material-symbols-rounded">restart_alt</span>{{ 'Restart' | t }}</button>
           }
         </aside>
       }
-      <nav class="bottom-nav" aria-label="Main navigation">
+      <nav class="bottom-nav" [attr.aria-label]="'Main navigation' | t">
         @for (item of nav; track item.path) {
           <a [routerLink]="item.path" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: item.path === '/' }">
-            <span class="material-symbols-rounded">{{ item.icon }}</span><span>{{ item.label }}</span>
+            <span class="material-symbols-rounded">{{ item.icon }}</span><span>{{ (item.label | t) }}</span>
           </a>
         }
       </nav>

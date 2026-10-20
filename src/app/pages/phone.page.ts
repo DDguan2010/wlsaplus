@@ -1,3 +1,4 @@
+import { I18nService, TranslatePipe } from '../core/i18n.service';
 import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,52 +10,52 @@ import { PhoneService } from '../core/phone.service';
 
 @Component({
   selector: 'app-phone-page',
-  imports: [RouterLink, MatButtonModule, MatSlideToggleModule, MatTooltipModule],
+  imports: [TranslatePipe, RouterLink, MatButtonModule, MatSlideToggleModule, MatTooltipModule],
   template: `
     <div class="page phone-page">
       <header class="page-header">
-        <a class="back icon-button" routerLink="/tools" aria-label="Back to tools"><span class="material-symbols-rounded">arrow_back</span></a>
-        <h1 class="page-title">Phone control</h1>
+        <a class="back icon-button" routerLink="/tools" [attr.aria-label]="'Back to tools' | t"><span class="material-symbols-rounded">arrow_back</span></a>
+        <h1 class="page-title">{{ 'Phone control' | t }}</h1>
         <span class="spacer"></span>
-        <a mat-stroked-button class="guide-link" [href]="guideUrl" target="_blank" rel="noopener noreferrer" (click)="openGuide($event)"><span class="material-symbols-rounded">help</span>How to use</a>
+        <a mat-stroked-button class="guide-link" [href]="guideUrl" target="_blank" rel="noopener noreferrer" (click)="openGuide($event)"><span class="material-symbols-rounded">help</span>{{ 'How to use' | t }}</a>
       </header>
 
       <section class="connection surface" aria-live="polite">
         <span class="status-icon material-symbols-rounded" [class.active]="status().state === 'mirroring'">{{ statusIcon() }}</span>
         <div class="connection-copy">
-          <strong>{{ statusTitle() }}</strong>
-          <span>{{ status().message }}</span>
+          <strong>{{ (statusTitle() | t) }}</strong>
+          <span>{{ (status().message | t) }}</span>
           @if (status().deviceName) {
-            <small>{{ status().deviceName }}@if (status().androidVersion) { · Android {{ status().androidVersion }} }@if (status().ip) { · {{ status().ip }} }</small>
+            <small>{{ status().deviceName }}@if (status().androidVersion) { {{ '· Android {p0}' | t:{p0: (status().androidVersion)} }}}@if (status().ip) { · {{ status().ip }} }</small>
           }
         </div>
         <div class="connection-actions">
           @if (working() && status().state !== 'stopping') {
-            <button mat-stroked-button (click)="stop()"><span class="material-symbols-rounded" aria-hidden="true">close</span>Cancel</button>
+            <button mat-stroked-button (click)="stop()"><span class="material-symbols-rounded" aria-hidden="true">close</span>{{ 'Cancel' | t }}</button>
           } @else if (status().state === 'mirroring') {
-            <button mat-flat-button (click)="stop()" [disabled]="working()"><span class="material-symbols-rounded">stop_circle</span>Close phone</button>
+            <button mat-flat-button (click)="stop()" [disabled]="working()"><span class="material-symbols-rounded">stop_circle</span>{{ 'Close phone' | t }}</button>
           } @else if (canReopen()) {
-            <button mat-flat-button (click)="start()" [disabled]="working()"><span class="material-symbols-rounded">smartphone</span>Open wirelessly</button>
+            <button mat-flat-button (click)="start()" [disabled]="working()"><span class="material-symbols-rounded">smartphone</span>{{ 'Open wirelessly' | t }}</button>
           } @else {
-            <button mat-flat-button (click)="connect()" [disabled]="working()"><span class="material-symbols-rounded">usb</span>{{ working() ? 'Connecting' : 'Connect by USB' }}</button>
+            <button mat-flat-button (click)="connect()" [disabled]="working()"><span class="material-symbols-rounded">usb</span>{{ working() ? ('Connecting' | t) : ('Connect by USB' | t) }}</button>
           }
-          @if (!working() && status().state === 'error' && canReopen()) { <button mat-stroked-button (click)="connect()"><span class="material-symbols-rounded">usb</span>Connect by USB</button> }
+          @if (!working() && status().state === 'error' && canReopen()) { <button mat-stroked-button (click)="connect()"><span class="material-symbols-rounded">usb</span>{{ 'Connect by USB' | t }}</button> }
         </div>
       </section>
 
       @if (status().state !== 'unsupported') {
         <section class="network-status" aria-live="polite">
           <span class="material-symbols-rounded">encrypted</span>
-          <div><strong>Secure connection</strong><span>{{ networkLabel() }}</span></div>
+          <div><strong>{{ 'Secure connection' | t }}</strong><span>{{ (networkLabel() | t) }}</span></div>
         </section>
       }
 
       @if (status().state === 'mirroring') {
         <section>
-          <h2 class="section-title">Controls</h2>
-          <div class="control-bar surface" aria-label="Phone controls">
+          <h2 class="section-title">{{ 'Controls' | t }}</h2>
+          <div class="control-bar surface" [attr.aria-label]="'Phone controls' | t">
             @for (control of controls; track control.action) {
-              <button type="button" class="control-button" (click)="control.action && sendControl(control.action)" [matTooltip]="control.label" [attr.aria-label]="control.label">
+              <button type="button" class="control-button" (click)="control.action && sendControl(control.action)" [matTooltip]="(control.label | t)" [attr.aria-label]="(control.label | t)">
                 <span class="material-symbols-rounded">{{ control.icon }}</span>
               </button>
             }
@@ -63,21 +64,21 @@ import { PhoneService } from '../core/phone.service';
       }
 
       <section>
-        <h2 class="section-title">First connection</h2>
+        <h2 class="section-title">{{ 'First connection' | t }}</h2>
         <div class="setup-list surface">
-          <div class="setup-step"><span class="step-number">1</span><div><strong>Enable USB debugging</strong><span>On the Android phone, enable Developer options and USB debugging.</span></div></div>
-          <div class="setup-step"><span class="step-number">2</span><div><strong>Connect and authorize</strong><span>Connect the phone by USB, unlock it, then allow this computer on the debugging prompt.</span></div></div>
-          <div class="setup-step"><span class="step-number">3</span><div><strong>Approve your computer</strong><span>If prompted, enable the connection in the Android app and approve the matching code. Unplug USB after the phone window opens.</span></div></div>
+          <div class="setup-step"><span class="step-number">1</span><div><strong>{{ 'Enable USB debugging' | t }}</strong><span>{{ 'On the Android phone, enable Developer options and USB debugging.' | t }}</span></div></div>
+          <div class="setup-step"><span class="step-number">2</span><div><strong>{{ 'Connect and authorize' | t }}</strong><span>{{ 'Connect the phone by USB, unlock it, then allow this computer on the debugging prompt.' | t }}</span></div></div>
+          <div class="setup-step"><span class="step-number">3</span><div><strong>{{ 'Approve your computer' | t }}</strong><span>{{ 'If prompted, enable the connection in the Android app and approve the matching code. Unplug USB after the phone window opens.' | t }}</span></div></div>
         </div>
       </section>
 
       <section>
-        <h2 class="section-title">Mirroring</h2>
+        <h2 class="section-title">{{ 'Mirroring' | t }}</h2>
         <div class="settings-list surface">
-          <div class="setting"><div><strong>Turn off the phone display</strong><span>The computer view stays active while the physical phone screen is black.</span></div><mat-slide-toggle [checked]="turnScreenOff()" (change)="setTurnScreenOff($event.checked)" [disabled]="working() || status().state === 'mirroring'"></mat-slide-toggle></div>
-          <div class="setting"><div><strong>Sound</strong><span>@if (status().audioAvailable === false) { This phone needs Android 11 or newer for audio. } @else { Sound starts automatically on Android 11 or newer. Keep Android 11 phones unlocked while opening the mirror. }</span></div><span class="material-symbols-rounded feature-state">{{ status().audioAvailable === false ? 'volume_off' : 'volume_up' }}</span></div>
+          <div class="setting"><div><strong>{{ 'Turn off the phone display' | t }}</strong><span>{{ 'The computer view stays active while the physical phone screen is black.' | t }}</span></div><mat-slide-toggle [checked]="turnScreenOff()" (change)="setTurnScreenOff($event.checked)" [disabled]="working() || status().state === 'mirroring'"></mat-slide-toggle></div>
+          <div class="setting"><div><strong>{{ 'Sound' | t }}</strong><span>@if (status().audioAvailable === false) {  {{ 'This phone needs Android 11 or newer for audio.' | t }} } @else {  {{ 'Sound starts automatically on Android 11 or newer. Keep Android 11 phones unlocked while opening the mirror.' | t }} }</span></div><span class="material-symbols-rounded feature-state">{{ status().audioAvailable === false ? 'volume_off' : 'volume_up' }}</span></div>
           @if (status().serial || network().pairedPhone) {
-            <div class="setting"><div><strong>Wireless device</strong><span>{{ status().serial }}</span></div><button mat-stroked-button (click)="disconnect()" [disabled]="working()"><span class="material-symbols-rounded">link_off</span>Forget</button></div>
+            <div class="setting"><div><strong>{{ 'Wireless device' | t }}</strong><span>{{ status().serial }}</span></div><button mat-stroked-button (click)="disconnect()" [disabled]="working()"><span class="material-symbols-rounded">link_off</span>{{ 'Forget' | t }}</button></div>
           }
         </div>
       </section>
@@ -102,6 +103,7 @@ import { PhoneService } from '../core/phone.service';
   `,
 })
 export class PhonePage {
+  readonly i18n = inject(I18nService);
   private readonly phone = inject(PhoneService);
   private readonly snack = inject(MatSnackBar);
   readonly status = this.phone.status;
@@ -174,6 +176,6 @@ export class PhonePage {
 
   private async run(operation: () => Promise<void>): Promise<void> {
     try { await operation(); }
-    catch (error) { this.snack.open(error instanceof Error ? error.message : 'Phone control failed.', 'Dismiss', { duration: 7000 }); }
+    catch (error) { this.snack.open(this.i18n.t(error instanceof Error ? error.message : 'Phone control failed.'), this.i18n.t('Dismiss'), { duration: 7000 }); }
   }
 }

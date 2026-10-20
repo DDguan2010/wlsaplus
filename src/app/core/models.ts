@@ -1,4 +1,5 @@
 export type ThemeMode = 'system' | 'light' | 'dark';
+export type AppLanguage = 'en' | 'zh-CN';
 export type AppColor = 'default' | 'red' | 'orange' | 'yellow' | 'green' | 'blue' | 'purple' | 'pink' | 'rose';
 export type DesktopCardType = 'current-class' | 'next-class' | 'today' | 'todo';
 
@@ -174,6 +175,7 @@ export function todoDeadlineProgress(todo: Pick<TodoItem, 'createdAt' | 'endAt'>
 }
 
 export interface AppSettings {
+  language: AppLanguage;
   theme: ThemeMode;
   color: AppColor;
   tuningEnabled: boolean;

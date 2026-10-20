@@ -40,7 +40,7 @@ describe('campus room map', () => {
     expect(getComputedStyle(document.querySelector('g[data-building="2"] .footprint')!).fill).toBe('rgb(255, 223, 137)');
     expect(getComputedStyle(document.querySelector('g[data-building="5"] .footprint')!).fill).not.toBe('rgb(255, 223, 137)');
     const closed = firstValueFrom(ref.afterClosed());
-    (document.querySelector('button[aria-label="Close map"]') as HTMLButtonElement).click();
+    (document.querySelector('app-room-map-dialog button[mat-dialog-close]') as HTMLButtonElement).click();
     await closed;
     expect(TestBed.inject(MatDialog).openDialogs).toHaveLength(0);
   });

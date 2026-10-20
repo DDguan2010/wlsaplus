@@ -1,5 +1,5 @@
+import { I18nService, TranslatePipe, LocalizedDatePipe } from '../core/i18n.service';
 import { Component, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -9,7 +9,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ClockService } from '../core/clock.service';
 import { LocalStore } from '../core/local-store.service';
-import type { AppColor, DesktopCardType, ThemeMode } from '../core/models';
+import type { AppColor, AppLanguage, DesktopCardType, ThemeMode } from '../core/models';
 import { PlatformService } from '../core/platform.service';
 import { PowerSchoolService } from '../core/powerschool.service';
 import { UpdateService } from '../core/update.service';
@@ -18,50 +18,51 @@ import { BUILD_VERSION } from '../build-info';
 
 @Component({
   selector: 'app-settings-page',
-  imports: [DatePipe, FormsModule, MatButtonModule, MatButtonToggleModule, MatSlideToggleModule],
+  imports: [TranslatePipe, LocalizedDatePipe, FormsModule, MatButtonModule, MatButtonToggleModule, MatSlideToggleModule],
   template: `
     <div class="page">
-      <header class="page-header"><h1 class="page-title">Settings</h1></header>
-      <section><h2 class="section-title">Appearance</h2><div class="settings-list surface">
-        <div class="setting"><div><strong>Theme</strong><span>Choose how WLSAPlus looks.</span></div><mat-button-toggle-group [value]="store.settings().theme" (change)="setTheme($event.value)"><mat-button-toggle value="system">System</mat-button-toggle><mat-button-toggle value="light">Light</mat-button-toggle><mat-button-toggle value="dark">Dark</mat-button-toggle></mat-button-toggle-group></div>
-        <div class="setting color-setting"><div><strong>App color</strong><span>Choose your accent color.</span></div><div class="color-options" role="radiogroup" aria-label="App color">
+      <header class="page-header"><h1 class="page-title">{{ 'Settings' | t }}</h1></header>
+      <section><h2 class="section-title">{{ 'Appearance' | t }}</h2><div class="settings-list surface">
+        <div class="setting language-setting"><div><strong>{{ 'Language' | t }}</strong><span>{{ 'Choose your app language.' | t }}</span></div><mat-button-toggle-group [value]="store.settings().language" (change)="setLanguage($event.value)" [attr.aria-label]="'Language' | t"><mat-button-toggle value="en">English</mat-button-toggle><mat-button-toggle value="zh-CN">中文</mat-button-toggle></mat-button-toggle-group></div>
+        <div class="setting"><div><strong>{{ 'Theme' | t }}</strong><span>{{ 'Choose how WLSAPlus looks.' | t }}</span></div><mat-button-toggle-group [value]="store.settings().theme" (change)="setTheme($event.value)"><mat-button-toggle value="system">{{ 'System' | t }}</mat-button-toggle><mat-button-toggle value="light">{{ 'Light' | t }}</mat-button-toggle><mat-button-toggle value="dark">{{ 'Dark' | t }}</mat-button-toggle></mat-button-toggle-group></div>
+        <div class="setting color-setting"><div><strong>{{ 'App color' | t }}</strong><span>{{ 'Choose your accent color.' | t }}</span></div><div class="color-options" role="radiogroup" [attr.aria-label]="'App color' | t">
           @for (option of colors; track option.value) {
-            <button type="button" role="radio" class="color-option" [class.selected]="store.settings().color === option.value" [attr.aria-checked]="store.settings().color === option.value" (click)="setColor(option.value)"><span class="color-swatch" [style.background]="option.swatch"></span><span>{{ option.label }}</span></button>
+            <button type="button" role="radio" class="color-option" [class.selected]="store.settings().color === option.value" [attr.aria-checked]="store.settings().color === option.value" (click)="setColor(option.value)"><span class="color-swatch" [style.background]="option.swatch"></span><span>{{ (option.label | t) }}</span></button>
           }
         </div></div>
       </div></section>
 
-      <section><h2 class="section-title">Schedule</h2><div class="settings-list surface">
-        <div class="setting"><div><strong>PowerSchool</strong><span>@if (store.schedule().syncedAt) { Last updated {{ store.schedule().syncedAt | date:'MMM d, HH:mm' }} } @else { Not connected }</span></div><button mat-stroked-button (click)="sync()" [disabled]="syncing() || !platform.info.supportsPowerSchool"><span class="material-symbols-rounded">sync</span>{{ syncing() ? 'Syncing' : 'Sync now' }}</button></div>
-        <div class="setting"><div><strong>Account</strong><span>Change your PowerSchool login.</span></div><button mat-button (click)="changeAccount()">Change account</button></div>
+      <section><h2 class="section-title">{{ 'Schedule' | t }}</h2><div class="settings-list surface">
+        <div class="setting"><div><strong>PowerSchool</strong><span>@if (store.schedule().syncedAt) { {{ 'Last updated {p0}' | t:{p0: (store.schedule().syncedAt | appDate:'MMM d, HH:mm')} }}} @else {  {{ 'Not connected' | t }} }</span></div><button mat-stroked-button (click)="sync()" [disabled]="syncing() || !platform.info.supportsPowerSchool"><span class="material-symbols-rounded">sync</span>{{ syncing() ? ('Syncing' | t) : ('Sync now' | t) }}</button></div>
+        <div class="setting"><div><strong>{{ 'Account' | t }}</strong><span>{{ 'Change your PowerSchool login.' | t }}</span></div><button mat-button (click)="changeAccount()">{{ 'Change account' | t }}</button></div>
       </div></section>
 
-      <section><h2 class="section-title">Tuning</h2><div class="settings-list surface">
-        <div class="setting"><div><strong>Simulated time</strong><span>Preview the current-class card at another time.</span></div><mat-slide-toggle [checked]="store.settings().tuningEnabled" (change)="toggleTuning($event.checked)"></mat-slide-toggle></div>
+      <section><h2 class="section-title">{{ 'Tuning' | t }}</h2><div class="settings-list surface">
+        <div class="setting"><div><strong>{{ 'Simulated time' | t }}</strong><span>{{ 'Preview the current-class card at another time.' | t }}</span></div><mat-slide-toggle [checked]="store.settings().tuningEnabled" (change)="toggleTuning($event.checked)"></mat-slide-toggle></div>
         @if (store.settings().tuningEnabled) {
-          <div class="tuning-panel"><input type="datetime-local" [value]="localDateTime()" (change)="setTime($event)"><div class="time-buttons"><button mat-stroked-button (click)="clock.shiftMinutes(-15)">-15 min</button><button mat-stroked-button (click)="clock.reset()">Now</button><button mat-stroked-button (click)="clock.shiftMinutes(15)">+15 min</button></div></div>
+          <div class="tuning-panel"><input type="datetime-local" [value]="localDateTime()" (change)="setTime($event)"><div class="time-buttons"><button mat-stroked-button (click)="clock.shiftMinutes(-15)">{{ '-15 min' | t }}</button><button mat-stroked-button (click)="clock.reset()">{{ 'Now' | t }}</button><button mat-stroked-button (click)="clock.shiftMinutes(15)">{{ '+15 min' | t }}</button></div></div>
         }
       </div></section>
 
       @if (platform.info.supportsDesktopCards) {
-        <section><h2 class="section-title">Windows Desktop Cards</h2><div class="settings-list surface"><div class="setting"><div><strong>Launch cards at startup</strong><span>Restore your desktop cards when Windows starts.</span></div><mat-slide-toggle [checked]="launchAtStartup()" (change)="setLaunchAtStartup($event.checked)"></mat-slide-toggle></div><div class="setting"><div><strong>Add a desktop card</strong><span>Cards stay behind normal app windows and do not appear in the taskbar.</span></div></div><div class="widget-actions">@for (card of cards; track card.type) { <button mat-stroked-button (click)="addCard(card.type)"><span class="material-symbols-rounded">{{ card.icon }}</span>{{ card.label }}</button> }</div></div></section>
+        <section><h2 class="section-title">{{ 'Windows Desktop Cards' | t }}</h2><div class="settings-list surface"><div class="setting"><div><strong>{{ 'Launch cards at startup' | t }}</strong><span>{{ 'Restore your desktop cards when Windows starts.' | t }}</span></div><mat-slide-toggle [checked]="launchAtStartup()" (change)="setLaunchAtStartup($event.checked)"></mat-slide-toggle></div><div class="setting"><div><strong>{{ 'Add a desktop card' | t }}</strong><span>{{ 'Cards stay behind normal app windows and do not appear in the taskbar.' | t }}</span></div></div><div class="widget-actions">@for (card of cards; track card.type) { <button mat-stroked-button (click)="addCard(card.type)"><span class="material-symbols-rounded">{{ card.icon }}</span>{{ (card.label | t) }}</button> }</div></div></section>
       }
 
       @if (platform.info.kind === 'electron' && platform.info.os === 'windows') {
-        <section><h2 class="section-title">Software updates</h2><div class="settings-list surface"><div class="setting update-setting"><div><strong>WLSAPlus {{ version }}</strong><span>{{ updater.status().message }}</span>@if (updater.status().state === 'downloading') { <div class="update-progress"><progress [value]="updater.status().percent ?? 0" max="100"></progress><span>{{ updater.status().percent ?? 0 }}%</span></div> }</div>
+        <section><h2 class="section-title">{{ 'Software updates' | t }}</h2><div class="settings-list surface"><div class="setting update-setting"><div><strong>WLSAPlus {{ version }}</strong><span>{{ (updater.status().message | t) }}</span>@if (updater.status().state === 'downloading') { <div class="update-progress"><progress [value]="updater.status().percent ?? 0" max="100"></progress><span>{{ updater.status().percent ?? 0 }}%</span></div> }</div>
           @switch (updater.status().state) {
-            @case ('available') { <button mat-flat-button (click)="updater.download()"><span class="material-symbols-rounded">download</span>Download update</button> }
-            @case ('ready') { <button mat-flat-button (click)="updater.install()"><span class="material-symbols-rounded">restart_alt</span>Restart and install</button> }
-            @case ('downloading') { <button mat-button disabled>Downloading</button> }
-            @case ('installing') { <button mat-button disabled>Installing</button> }
-            @case ('checking') { <button mat-button disabled>Checking</button> }
-            @default { <button mat-stroked-button (click)="updater.check()"><span class="material-symbols-rounded">refresh</span>Check for updates</button> }
+            @case ('available') { <button mat-flat-button (click)="updater.download()"><span class="material-symbols-rounded">download</span>{{ 'Download update' | t }}</button> }
+            @case ('ready') { <button mat-flat-button (click)="updater.install()"><span class="material-symbols-rounded">restart_alt</span>{{ 'Restart and install' | t }}</button> }
+            @case ('downloading') { <button mat-button disabled>{{ 'Downloading' | t }}</button> }
+            @case ('installing') { <button mat-button disabled>{{ 'Installing' | t }}</button> }
+            @case ('checking') { <button mat-button disabled>{{ 'Checking' | t }}</button> }
+            @default { <button mat-stroked-button (click)="updater.check()"><span class="material-symbols-rounded">refresh</span>{{ 'Check for updates' | t }}</button> }
           }
         </div></div></section>
       }
 
-      <section><h2 class="section-title">Local Data</h2><div class="settings-list surface danger-zone"><div class="setting"><div><strong>Clear this device</strong><span>Remove saved account information, schedule, and tasks.</span></div><button mat-stroked-button (click)="clearData()">Clear data</button></div></div></section>
-      <footer>WLSAPlus {{ version }} · Local-first student tools</footer>
+      <section><h2 class="section-title">{{ 'Local Data' | t }}</h2><div class="settings-list surface danger-zone"><div class="setting"><div><strong>{{ 'Clear this device' | t }}</strong><span>{{ 'Remove saved account information, schedule, and tasks.' | t }}</span></div><button mat-stroked-button (click)="clearData()">{{ 'Clear data' | t }}</button></div></div></section>
+      <footer>{{ 'WLSAPlus {p0} · Local-first student tools' | t:{p0: (version)} }}</footer>
     </div>
   `,
   styles: `
@@ -76,6 +77,7 @@ import { BUILD_VERSION } from '../build-info';
   `,
 })
 export class SettingsPage {
+  readonly i18n = inject(I18nService);
   readonly version = BUILD_VERSION;
   readonly store = inject(LocalStore); readonly clock = inject(ClockService); readonly platform = inject(PlatformService);
   readonly updater = inject(UpdateService);
@@ -100,13 +102,14 @@ export class SettingsPage {
     if (this.platform.info.supportsDesktopCards) void window.wlsaplus?.desktopCards.getSettings().then((value) => this.launchAtStartup.set(value.launchAtStartup));
   }
   setTheme(theme: ThemeMode): void { this.store.updateSettings({ theme }); }
+  setLanguage(language: AppLanguage): void { this.store.updateSettings({ language }); }
   setColor(color: AppColor): void { this.store.updateSettings({ color }); }
   toggleTuning(enabled: boolean): void { this.store.updateSettings({ tuningEnabled: enabled, tunedTime: enabled ? (this.store.settings().tunedTime ?? new Date().toISOString()) : null }); }
   localDateTime(): string { const date = this.clock.now(); const offset = date.getTimezoneOffset(); return new Date(date.getTime() - offset * 60_000).toISOString().slice(0, 16); }
   setTime(event: Event): void { this.clock.setTunedTime((event.target as HTMLInputElement).value); }
-  async sync(): Promise<void> { this.syncing.set(true); try { await this.service.syncSaved(); this.snack.open('Schedule updated', undefined, { duration: 2500 }); } catch (error) { this.snack.open(error instanceof Error ? error.message : 'Sync failed', 'Dismiss'); } finally { this.syncing.set(false); } }
+  async sync(): Promise<void> { this.syncing.set(true); try { await this.service.syncSaved(); this.snack.open(this.i18n.t('Schedule updated'), undefined, { duration: 2500 }); } catch (error) { this.snack.open(this.i18n.t(error instanceof Error ? error.message : 'Sync failed'), this.i18n.t('Dismiss')); } finally { this.syncing.set(false); } }
   async changeAccount(): Promise<void> { await this.router.navigateByUrl('/connect'); }
-  async addCard(type: DesktopCardType): Promise<void> { await window.wlsaplus?.desktopCards.add(type); this.snack.open('Desktop card added', undefined, { duration: 2200 }); }
+  async addCard(type: DesktopCardType): Promise<void> { await window.wlsaplus?.desktopCards.add(type); this.snack.open(this.i18n.t('Desktop card added'), undefined, { duration: 2200 }); }
   async setLaunchAtStartup(value: boolean): Promise<void> { this.launchAtStartup.set(value); await window.wlsaplus?.desktopCards.setSettings({ launchAtStartup: value }); }
-  clearData(): void { this.dialog.open(ConfirmDialogComponent, { data: { title: 'Clear this device?', message: 'Saved credentials, schedule, and tasks will be removed.', action: 'Clear data' } }).afterClosed().subscribe(async (confirmed) => { if (confirmed) { await this.service.disconnect(); await this.router.navigateByUrl('/connect'); } }); }
+  clearData(): void { this.dialog.open(ConfirmDialogComponent, { data: { title: 'Clear this device?', messageKey: 'Saved credentials, schedule, and tasks will be removed.', action: 'Clear data' } }).afterClosed().subscribe(async (confirmed) => { if (confirmed) { await this.service.disconnect(); await this.router.navigateByUrl('/connect'); } }); }
 }

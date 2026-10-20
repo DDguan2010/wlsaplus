@@ -1,3 +1,4 @@
+import { I18nService, TranslatePipe } from '../core/i18n.service';
 import { Component, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -10,17 +11,17 @@ import { TranslationService } from '../core/translation.service';
 
 @Component({
   selector: 'app-translator-page',
-  imports: [FormsModule, RouterLink, MatButtonModule, MatProgressSpinnerModule, MatSelectModule],
+  imports: [TranslatePipe, FormsModule, RouterLink, MatButtonModule, MatProgressSpinnerModule, MatSelectModule],
   template: `
     <div class="page translator-page">
-      <header class="page-header"><a class="back icon-button" routerLink="/tools" aria-label="Back to tools"><span class="material-symbols-rounded">arrow_back</span></a><h1 class="page-title">Translator</h1><span class="spacer"></span>@if (platform.info.supportsScreenTranslation) { <button mat-stroked-button class="capture" (click)="capture()" [disabled]="working()"><span class="material-symbols-rounded">screenshot_region</span>Translate screen</button> }</header>
-      <div class="language-bar surface"><mat-select [(value)]="source" aria-label="Source language">@for (language of sourceLanguages; track language.code) { <mat-option [value]="language.code">{{ language.label }}</mat-option> }</mat-select><button class="swap icon-button" (click)="swap()" [disabled]="source === 'auto'" aria-label="Swap languages"><span class="material-symbols-rounded">swap_horiz</span></button><mat-select [(value)]="target" aria-label="Target language">@for (language of targetLanguages; track language.code) { <mat-option [value]="language.code">{{ language.label }}</mat-option> }</mat-select></div>
+      <header class="page-header"><a class="back icon-button" routerLink="/tools" [attr.aria-label]="'Back to tools' | t"><span class="material-symbols-rounded">arrow_back</span></a><h1 class="page-title">{{ 'Translator' | t }}</h1><span class="spacer"></span>@if (platform.info.supportsScreenTranslation) { <button mat-stroked-button class="capture" (click)="capture()" [disabled]="working()"><span class="material-symbols-rounded">screenshot_region</span>{{ 'Translate screen' | t }}</button> }</header>
+      <div class="language-bar surface"><mat-select [(value)]="source" [attr.aria-label]="'Source language' | t">@for (language of sourceLanguages; track language.code) { <mat-option [value]="language.code">{{ (language.label | t) }}</mat-option> }</mat-select><button class="swap icon-button" (click)="swap()" [disabled]="source === 'auto'" [attr.aria-label]="'Swap languages' | t"><span class="material-symbols-rounded">swap_horiz</span></button><mat-select [(value)]="target" [attr.aria-label]="'Target language' | t">@for (language of targetLanguages; track language.code) { <mat-option [value]="language.code">{{ (language.label | t) }}</mat-option> }</mat-select></div>
       <section class="translation-workspace surface">
-        <div class="text-pane"><textarea [(ngModel)]="input" maxlength="5000" placeholder="Enter text" aria-label="Text to translate"></textarea><span class="counter">{{ input.length }} / 5000</span></div>
+        <div class="text-pane"><textarea [(ngModel)]="input" maxlength="5000" [placeholder]="'Enter text' | t" [attr.aria-label]="'Text to translate' | t"></textarea><span class="counter">{{ input.length }} / 5000</span></div>
         <div class="divider"></div>
-        <div class="text-pane result-pane">@if (working()) { <div class="working"><mat-spinner diameter="34"></mat-spinner><span>{{ progress() }}</span></div> } @else { <textarea [value]="output" readonly placeholder="Translation" aria-label="Translation result"></textarea> }<button class="copy icon-button" (click)="copy()" [disabled]="!output" aria-label="Copy translation"><span class="material-symbols-rounded">content_copy</span></button></div>
+        <div class="text-pane result-pane">@if (working()) { <div class="working"><mat-spinner diameter="34"></mat-spinner><span>{{ (progress() | t) }}</span></div> } @else { <textarea [value]="output" readonly [placeholder]="'Translation' | t" [attr.aria-label]="'Translation result' | t"></textarea> }<button class="copy icon-button" (click)="copy()" [disabled]="!output" [attr.aria-label]="'Copy translation' | t"><span class="material-symbols-rounded">content_copy</span></button></div>
       </section>
-      <div class="actions"><button mat-flat-button (click)="translate()" [disabled]="working() || !input.trim()"><span class="material-symbols-rounded">translate</span>Translate</button></div>
+      <div class="actions"><button mat-flat-button (click)="translate()" [disabled]="working() || !input.trim()"><span class="material-symbols-rounded">translate</span>{{ 'Translate' | t }}</button></div>
     </div>
   `,
   styles: `
@@ -32,6 +33,7 @@ import { TranslationService } from '../core/translation.service';
   `,
 })
 export class TranslatorPage {
+  readonly i18n = inject(I18nService);
   readonly platform = inject(PlatformService); private readonly service = inject(TranslationService); private readonly snack = inject(MatSnackBar);
   readonly working = signal(false); readonly progress = signal('Translating...');
   input = ''; output = ''; source = 'auto'; target = 'en';
@@ -42,7 +44,7 @@ export class TranslatorPage {
     if (!this.input.trim()) return;
     this.working.set(true); this.progress.set('Translating...');
     try { this.output = (await this.service.translate(this.input, this.source, this.target)).text; }
-    catch (error) { this.snack.open(error instanceof Error ? error.message : 'Translation failed.', 'Dismiss'); }
+    catch (error) { this.snack.open(this.i18n.t(error instanceof Error ? error.message : 'Translation failed.'), this.i18n.t('Dismiss')); }
     finally { this.working.set(false); }
   }
 
@@ -62,17 +64,17 @@ export class TranslatorPage {
         corePath: ocrPath,
         langPath: ocrPath,
         workerBlobURL: false,
-        logger: (message) => { if (message.status === 'recognizing text') this.progress.set(`Recognizing ${Math.round(message.progress * 100)}%`); },
+        logger: (message) => { if (message.status === 'recognizing text') this.progress.set(this.i18n.t('Recognizing {percent}%', { percent: Math.round(message.progress * 100) })); },
       });
       try { this.input = (await worker.recognize(image)).data.text.trim(); } finally { await worker.terminate(); }
       if (this.input) {
         this.progress.set('Translating...');
         this.output = (await this.service.translate(this.input, 'auto', this.target)).text;
-      } else this.snack.open('No text was recognized in that region.', undefined, { duration: 2600 });
-    } catch (error) { this.snack.open(error instanceof Error ? error.message : 'Screen translation failed.', 'Dismiss'); }
+      } else this.snack.open(this.i18n.t('No text was recognized in that region.'), undefined, { duration: 2600 });
+    } catch (error) { this.snack.open(this.i18n.t(error instanceof Error ? error.message : 'Screen translation failed.'), this.i18n.t('Dismiss')); }
     finally { this.working.set(false); }
   }
 
   swap(): void { if (this.source === 'auto') return; [this.source, this.target] = [this.target, this.source]; [this.input, this.output] = [this.output, this.input]; }
-  async copy(): Promise<void> { if (this.output) { await navigator.clipboard.writeText(this.output); this.snack.open('Translation copied', undefined, { duration: 1600 }); } }
+  async copy(): Promise<void> { if (this.output) { await navigator.clipboard.writeText(this.output); this.snack.open(this.i18n.t('Translation copied'), undefined, { duration: 1600 }); } }
 }

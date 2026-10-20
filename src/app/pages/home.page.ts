@@ -1,5 +1,5 @@
+import { I18nService, TranslatePipe, LocalizedDatePipe } from '../core/i18n.service';
 import { Component, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { CdkDrag, CdkDragDrop, CdkDragHandle, CdkDropList } from '@angular/cdk/drag-drop';
 import { RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
@@ -25,33 +25,33 @@ import { RoomMapDirective } from '../shared/room-map.directive';
 
 @Component({
   selector: 'app-home-page',
-  imports: [DatePipe, CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatDialogModule, MatProgressBarModule, MatSnackBarModule, MatTooltipModule, RoomMapDirective],
+  imports: [TranslatePipe, LocalizedDatePipe, CdkDrag, CdkDragHandle, CdkDropList, RouterLink, MatButtonModule, MatDialogModule, MatProgressBarModule, MatSnackBarModule, MatTooltipModule, RoomMapDirective],
   template: `
     <div class="page">
-      <header class="page-header"><div><div class="eyebrow">{{ clock.now() | date:'EEEE, MMMM d' }}</div><h1 class="page-title">Overview</h1></div><a mat-icon-button class="header-icon-button" routerLink="/settings" aria-label="Open settings"><span class="material-symbols-rounded">settings</span></a></header>
+      <header class="page-header"><div><div class="eyebrow">{{ clock.now() | appDate:'EEEE, MMMM d' }}</div><h1 class="page-title">{{ 'Overview' | t }}</h1></div><a mat-icon-button class="header-icon-button" routerLink="/settings" [attr.aria-label]="'Open settings' | t"><span class="material-symbols-rounded">settings</span></a></header>
 
       <section class="class-card">
-        <a class="class-card-link" routerLink="/schedule" aria-label="Open full schedule"></a>
-        <div class="card-top"><span class="state-dot"></span><span class="state-label">{{ cardState().label }}</span><span class="spacer"></span><span class="time-now">{{ clock.now() | date:'HH:mm' }}</span></div>
+        <a class="class-card-link" routerLink="/schedule" [attr.aria-label]="'Open full schedule' | t"></a>
+        <div class="card-top"><span class="state-dot"></span><span class="state-label">{{ (cardState().label | t) }}</span><span class="spacer"></span><span class="time-now">{{ clock.now() | appDate:'HH:mm' }}</span></div>
         @if (featured(); as session) {
           <h2>{{ session.courseName }}</h2>
-          <div class="time-range">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</div>
-          <div class="facts"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || 'Teacher unavailable' }}</span><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'Room unavailable' }}</button></div>
+          <div class="time-range">{{ session.startsAt | appDate:'HH:mm' }} - {{ session.endsAt | appDate:'HH:mm' }}</div>
+          <div class="facts"><span><span class="material-symbols-rounded">person</span>{{ session.teacher || ('Teacher unavailable' | t) }}</span><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || ('Room unavailable' | t) }}</button></div>
           <mat-progress-bar mode="determinate" [value]="progress()" />
-          <div class="card-bottom"><strong>{{ countdown() }}</strong><span>{{ duration(session) }} min class</span></div>
-          @if (nextAfterFeatured(); as next) { <div class="next-line"><span>Next</span><strong>{{ next.courseName }}</strong><span>{{ next.startsAt | date:'HH:mm' }}</span></div> }
+          <div class="card-bottom"><strong>{{ countdown() }}</strong><span>{{ '{p0} min class' | t:{p0: (duration(session))} }}</span></div>
+          @if (nextAfterFeatured(); as next) { <div class="next-line"><span>{{ 'Next' | t }}</span><strong>{{ next.courseName }}</strong><span>{{ next.startsAt | appDate:'HH:mm' }}</span></div> }
         } @else {
-          <div class="clear-state"><span class="material-symbols-rounded">event_available</span><h2>No more classes</h2><p>Your schedule is clear for now.</p></div>
+          <div class="clear-state"><span class="material-symbols-rounded">event_available</span><h2>{{ 'No more classes' | t }}</h2><p>{{ 'Your schedule is clear for now.' | t }}</p></div>
         }
       </section>
 
       <section class="timeline-section">
         <div class="section-heading timeline-heading">
-          <div><h2>Timeline</h2><span>{{ clock.now() | date:'MMM d, HH:mm' }} to {{ timeline().endsAt | date:'MMM d, HH:mm' }}</span></div>
-          <div class="timeline-zoom" aria-label="Timeline zoom controls">
-            <button mat-icon-button type="button" (click)="changeTimelineZoom(-25, timelineScroll)" [disabled]="timelineZoom() === minTimelineZoom" aria-label="Zoom timeline out" matTooltip="Show more time"><span class="material-symbols-rounded">zoom_out</span></button>
-            <output aria-live="polite" [attr.aria-label]="'Timeline zoom ' + timelineZoom() + ' percent'">{{ timelineZoom() }}%</output>
-            <button mat-icon-button type="button" (click)="changeTimelineZoom(25, timelineScroll)" [disabled]="timelineZoom() === maxTimelineZoom" aria-label="Zoom timeline in" matTooltip="Show more detail"><span class="material-symbols-rounded">zoom_in</span></button>
+          <div><h2>{{ 'Timeline' | t }}</h2><span>{{ '{p0} to {p1}' | t:{p0: (clock.now() | appDate:'MMM d, HH:mm'), p1: (timeline().endsAt | appDate:'MMM d, HH:mm')} }}</span></div>
+          <div class="timeline-zoom" [attr.aria-label]="'Timeline zoom controls' | t">
+            <button mat-icon-button type="button" (click)="changeTimelineZoom(-25, timelineScroll)" [disabled]="timelineZoom() === minTimelineZoom" [attr.aria-label]="'Zoom timeline out' | t" [matTooltip]="'Show more time' | t"><span class="material-symbols-rounded">zoom_out</span></button>
+            <output aria-live="polite" [attr.aria-label]="'Timeline zoom {percent} percent' | t:{percent: timelineZoom()}">{{ timelineZoom() }}%</output>
+            <button mat-icon-button type="button" (click)="changeTimelineZoom(25, timelineScroll)" [disabled]="timelineZoom() === maxTimelineZoom" [attr.aria-label]="'Zoom timeline in' | t" [matTooltip]="'Show more detail' | t"><span class="material-symbols-rounded">zoom_in</span></button>
           </div>
         </div>
         <div class="timeline-frame surface">
@@ -59,12 +59,12 @@ import { RoomMapDirective } from '../shared/room-map.directive';
             <div class="timeline-canvas" [style.width.px]="timelineWidth()">
               <div class="timeline-axis">
                 @for (tick of timeline().ticks; track tick.at; let first = $first; let last = $last) {
-                  <time [style.left.%]="tick.left" [class.first]="first" [class.last]="last">{{ first ? 'Now' : (tick.at | date:'EEE, MMM d') }}</time>
+                  <time [style.left.%]="tick.left" [class.first]="first" [class.last]="last">{{ first ? ('Now' | t) : (tick.at | appDate:'EEE, MMM d') }}</time>
                 }
               </div>
               <div class="timeline-body">
                 <span class="timeline-now" aria-hidden="true"></span>
-                <div class="timeline-group-label"><span class="material-symbols-rounded">calendar_month</span>Schedule</div>
+                <div class="timeline-group-label"><span class="material-symbols-rounded">calendar_month</span>{{ 'Schedule' | t }}</div>
                 @for (lane of timeline().scheduleLanes; track $index) {
                   <div class="timeline-lane">
                     @for (entry of lane; track entry.id) {
@@ -72,7 +72,7 @@ import { RoomMapDirective } from '../shared/room-map.directive';
                     }
                   </div>
                 } @empty { <div class="timeline-lane"></div> }
-                <div class="timeline-group-label"><span class="material-symbols-rounded">timer</span>Deadlines</div>
+                <div class="timeline-group-label"><span class="material-symbols-rounded">timer</span>{{ 'Deadlines' | t }}</div>
                 @for (lane of timeline().deadlineLanes; track $index) {
                   <div class="timeline-lane">
                     @for (entry of lane; track entry.id) {
@@ -80,7 +80,7 @@ import { RoomMapDirective } from '../shared/room-map.directive';
                     }
                   </div>
                 } @empty { <div class="timeline-lane"></div> }
-                <div class="timeline-group-label"><span class="material-symbols-rounded">schedule</span>Times</div>
+                <div class="timeline-group-label"><span class="material-symbols-rounded">schedule</span>{{ 'Times' | t }}</div>
                 @for (lane of timeline().timeLanes; track $index) {
                   <div class="timeline-lane timeline-point-lane">
                     @for (entry of lane; track entry.id) {
@@ -95,28 +95,28 @@ import { RoomMapDirective } from '../shared/room-map.directive';
       </section>
 
       <section class="todo-section">
-        <div class="section-heading"><div><h2>Tasks</h2><span>{{ store.todos().length }} open</span></div><button mat-mini-fab (click)="addTodo()" aria-label="Add a task"><span class="material-symbols-rounded">add</span></button></div>
+        <div class="section-heading"><div><h2>{{ 'Tasks' | t }}</h2><span>{{ '{p0} open' | t:{p0: (store.todos().length)} }}</span></div><button mat-mini-fab (click)="addTodo()" [attr.aria-label]="'Add a task' | t"><span class="material-symbols-rounded">add</span></button></div>
         <div class="todo-list surface" cdkDropList cdkDropListLockAxis="y" [cdkDropListData]="store.todos()" [cdkDropListDisabled]="store.todos().length < 2" (cdkDropListDropped)="reorderTodos($event)">
           @for (todo of store.todos(); track todo.id) {
             <div class="todo-row" cdkDrag cdkDragLockAxis="y" [cdkDragData]="todo" [class.expanded]="expandedTodoId() === todo.id" [attr.data-task-color]="todo.color">
-              <button mat-icon-button type="button" class="todo-drag-handle" cdkDragHandle [attr.aria-label]="'Drag to reorder ' + todo.title" matTooltip="Reorder task"><span class="material-symbols-rounded">drag_indicator</span></button>
-              <button class="todo-circle" (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"></button>
+              <button mat-icon-button type="button" class="todo-drag-handle" cdkDragHandle [attr.aria-label]="'Drag to reorder {title}' | t:{title: todo.title}" [matTooltip]="'Reorder task' | t"><span class="material-symbols-rounded">drag_indicator</span></button>
+              <button class="todo-circle" (click)="deleteTodo(todo)" [attr.aria-label]="'Delete {title}' | t:{title: todo.title}"></button>
               <div class="todo-main"><button class="todo-content" (click)="toggleTodo(todo.id)" [attr.aria-expanded]="expandedTodoId() === todo.id">
                   <span class="todo-title">@if (todo.icon) { <span class="todo-task-icon material-symbols-rounded">{{ todo.icon }}</span> }<strong>{{ todo.title }}</strong></span>
-                  @if (expandedTodoId() === todo.id) { <span class="todo-details">{{ todo.details || 'No additional information.' }}</span> }
+                  @if (expandedTodoId() === todo.id) { <span class="todo-details">{{ todo.details || ('No additional information.' | t) }}</span> }
                 </button>
                 @if (todo.endAt) {
-                  @if (todo.timeType === 'deadline') { <div class="todo-deadline" [class.overdue]="todoProgress(todo) >= 100"><div class="deadline-track"><span [style.width.%]="todoProgress(todo)"></span></div><time>Due {{ todo.endAt | date:'MMM d, HH:mm' }}</time></div> }
-                  @else { <div class="todo-time"><span class="material-symbols-rounded">calendar_clock</span><time>{{ todo.endAt | date:'EEE, MMM d · HH:mm' }}</time></div> }
+                  @if (todo.timeType === 'deadline') { <div class="todo-deadline" [class.overdue]="todoProgress(todo) >= 100"><div class="deadline-track"><span [style.width.%]="todoProgress(todo)"></span></div><time>{{ 'Due {p0}' | t:{p0: (todo.endAt | appDate:'MMM d, HH:mm')} }}</time></div> }
+                  @else { <div class="todo-time"><span class="material-symbols-rounded">calendar_clock</span><time>{{ todo.endAt | appDate:'EEE, MMM d · HH:mm' }}</time></div> }
                 }
                 </div>
               <div class="todo-actions">
-                <button mat-icon-button (click)="editTodo(todo)" [attr.aria-label]="'Edit ' + todo.title"><span class="material-symbols-rounded">edit</span></button>
-                <button mat-icon-button (click)="deleteTodo(todo)" [attr.aria-label]="'Delete ' + todo.title"><span class="material-symbols-rounded">delete</span></button>
+                <button mat-icon-button (click)="editTodo(todo)" [attr.aria-label]="'Edit {title}' | t:{title: todo.title}"><span class="material-symbols-rounded">edit</span></button>
+                <button mat-icon-button (click)="deleteTodo(todo)" [attr.aria-label]="'Delete {title}' | t:{title: todo.title}"><span class="material-symbols-rounded">delete</span></button>
               </div>
             </div>
           } @empty {
-            <div class="empty-state compact"><div><span class="material-symbols-rounded">check_circle</span><p>Nothing to do</p></div></div>
+            <div class="empty-state compact"><div><span class="material-symbols-rounded">check_circle</span><p>{{ 'Nothing to do' | t }}</p></div></div>
           }
         </div>
       </section>
@@ -163,6 +163,7 @@ import { RoomMapDirective } from '../shared/room-map.directive';
   `,
 })
 export class HomePage {
+  readonly i18n = inject(I18nService);
   readonly store = inject(LocalStore);
   readonly clock = inject(ClockService);
   private readonly dialog = inject(MatDialog);
@@ -172,7 +173,9 @@ export class HomePage {
   readonly maxTimelineZoom = HOME_TIMELINE_MAX_ZOOM;
   readonly timelineZoom = signal(100);
   readonly timelineWidth = computed(() => HOME_TIMELINE_BASE_WIDTH * this.timelineZoom() / 100);
-  readonly timeline = computed(() => buildHomeTimeline(this.store.schedule().sessions, this.store.todos(), this.clock.now().getTime()));
+  readonly timeline = computed(() => buildHomeTimeline(this.store.schedule().sessions, this.store.todos(), this.clock.now().getTime(), {
+    locale: this.i18n.locale(), due: this.i18n.t('Due'), scheduled: this.i18n.t('Scheduled'), to: this.i18n.t('to'),
+  }));
   private readonly timelineColors = ['#3569ad', '#287451', '#7453ad', '#b65c12', '#c43d4f', '#14747b', '#a94474'];
   private readonly ordered = computed(() => [...this.store.schedule().sessions].sort((a, b) => a.startsAt.localeCompare(b.startsAt)));
   readonly current = computed(() => this.ordered().find((item) => new Date(item.startsAt) <= this.clock.now() && new Date(item.endsAt) > this.clock.now()) ?? null);
@@ -191,7 +194,7 @@ export class HomePage {
     const session = this.featured(); if (!session) return '';
     const target = this.current() ? new Date(session.endsAt) : new Date(session.startsAt);
     const mins = Math.max(0, Math.ceil((target.getTime() - this.clock.now().getTime()) / 60_000));
-    return this.current() ? `${mins} min left` : `Starts in ${mins} min`;
+    return this.i18n.t(this.current() ? '{minutes} min left' : 'Starts in {minutes} min', { minutes: mins });
   });
   duration(session: ClassSession): number { return Math.round((new Date(session.endsAt).getTime() - new Date(session.startsAt).getTime()) / 60_000); }
   timelineColor(index: number): string { return this.timelineColors[index % this.timelineColors.length]; }
@@ -223,7 +226,7 @@ export class HomePage {
     this.dialog.open(ConfirmDialogComponent, { data: { title: 'Delete task?', message: todo.title, action: 'Delete' } }).afterClosed().subscribe((confirmed) => {
       if (!confirmed) return; const removed = this.store.removeTodo(todo.id); if (!removed) return;
       if (this.expandedTodoId() === todo.id) this.expandedTodoId.set(null);
-      this.snack.open('Task deleted', 'Undo', { duration: 4500 }).onAction().subscribe(() => this.store.restoreTodo(removed));
+      this.snack.open(this.i18n.t('Task deleted'), this.i18n.t('Undo'), { duration: 4500 }).onAction().subscribe(() => this.store.restoreTodo(removed));
     });
   }
   todoProgress(todo: TodoItem): number { return todoDeadlineProgress(todo, this.clock.now().getTime()); }

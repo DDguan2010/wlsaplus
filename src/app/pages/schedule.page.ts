@@ -1,5 +1,5 @@
+import { I18nService, TranslatePipe, LocalizedDatePipe } from '../core/i18n.service';
 import { Component, computed, inject, signal } from '@angular/core';
-import { DatePipe } from '@angular/common';
 import { MatButtonToggleModule } from '@angular/material/button-toggle';
 import { LocalStore } from '../core/local-store.service';
 import type { ClassSession } from '../core/models';
@@ -7,30 +7,30 @@ import { RoomMapDirective } from '../shared/room-map.directive';
 
 @Component({
   selector: 'app-schedule-page',
-  imports: [DatePipe, MatButtonToggleModule, RoomMapDirective],
+  imports: [TranslatePipe, LocalizedDatePipe, MatButtonToggleModule, RoomMapDirective],
   template: `
     <div class="page">
-      <header class="page-header"><h1 class="page-title">Schedule</h1><span class="sync-label">Updated {{ store.schedule().syncedAt | date:'MMM d, HH:mm' }}</span></header>
-      <mat-button-toggle-group [value]="view()" (change)="view.set($event.value)" aria-label="Schedule view"><mat-button-toggle value="week">Full Schedule</mat-button-toggle><mat-button-toggle value="courses">All Courses</mat-button-toggle></mat-button-toggle-group>
+      <header class="page-header"><h1 class="page-title">{{ 'Schedule' | t }}</h1><span class="sync-label">{{ 'Updated {p0}' | t:{p0: (store.schedule().syncedAt | appDate:'MMM d, HH:mm')} }}</span></header>
+      <mat-button-toggle-group [value]="view()" (change)="view.set($event.value)" [attr.aria-label]="'Schedule view' | t"><mat-button-toggle value="week">{{ 'Full Schedule' | t }}</mat-button-toggle><mat-button-toggle value="courses">{{ 'All Courses' | t }}</mat-button-toggle></mat-button-toggle-group>
       @if (view() === 'week') {
-        <div class="layout-row"><span>Layout</span><mat-button-toggle-group [value]="layout()" (change)="layout.set($event.value)" aria-label="Full schedule layout"><mat-button-toggle value="agenda"><span class="material-symbols-rounded">view_agenda</span>Agenda</mat-button-toggle><mat-button-toggle value="grid"><span class="material-symbols-rounded">calendar_view_week</span>Week Grid</mat-button-toggle></mat-button-toggle-group></div>
+        <div class="layout-row"><span>{{ 'Layout' | t }}</span><mat-button-toggle-group [value]="layout()" (change)="layout.set($event.value)" [attr.aria-label]="'Full schedule layout' | t"><mat-button-toggle value="agenda"><span class="material-symbols-rounded">view_agenda</span>{{ 'Agenda' | t }}</mat-button-toggle><mat-button-toggle value="grid"><span class="material-symbols-rounded">calendar_view_week</span>{{ 'Week Grid' | t }}</mat-button-toggle></mat-button-toggle-group></div>
         @if (layout() === 'agenda') {
           <div class="day-list">
             @for (day of days(); track day.date) {
-              <section class="day-section"><div class="day-heading"><div><strong>{{ day.date | date:'EEEE' }}</strong><span>{{ day.date | date:'MMMM d' }}</span></div><span>{{ day.sessions.length }} classes</span></div>
+              <section class="day-section"><div class="day-heading"><div><strong>{{ day.date | appDate:'EEEE' }}</strong><span>{{ day.date | appDate:'MMMM d' }}</span></div><span>{{ '{p0} classes' | t:{p0: (day.sessions.length)} }}</span></div>
                 <div class="session-list surface">
                   @for (session of day.sessions; track session.id) {
-                    <div class="session-row"><div class="session-time"><strong>{{ session.startsAt | date:'HH:mm' }}</strong><span>{{ session.endsAt | date:'HH:mm' }}</span></div><span class="color-bar"></span><div class="session-main"><strong>{{ session.courseName }}</strong><span>{{ session.teacher || 'Teacher unavailable' }}</span></div><div class="room"><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</button></div></div>
+                    <div class="session-row"><div class="session-time"><strong>{{ session.startsAt | appDate:'HH:mm' }}</strong><span>{{ session.endsAt | appDate:'HH:mm' }}</span></div><span class="color-bar"></span><div class="session-main"><strong>{{ session.courseName }}</strong><span>{{ session.teacher || ('Teacher unavailable' | t) }}</span></div><div class="room"><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || ('TBA' | t) }}</button></div></div>
                   }
                 </div>
               </section>
-            } @empty { <div class="surface empty-state">No schedule has been synced yet.</div> }
+            } @empty { <div class="surface empty-state">{{ 'No schedule has been synced yet.' | t }}</div> }
           </div>
         } @else {
           <div class="matrix-scroll surface">
             <div class="week-matrix">
               <div class="matrix-corner"></div>
-              @for (day of matrixDays(); track day.key) { <div class="matrix-header"><strong>{{ day.date | date:'EEEE' }}</strong><span>{{ day.date | date:'MMM d' }}</span></div> }
+              @for (day of matrixDays(); track day.key) { <div class="matrix-header"><strong>{{ day.date | appDate:'EEEE' }}</strong><span>{{ day.date | appDate:'MMM d' }}</span></div> }
               <div class="time-column" [style.height.px]="matrixHeight()">
                 @for (hour of hourMarks(); track hour) { <time [style.top.px]="lineTop(hour)">{{ hourLabel(hour) }}</time> }
               </div>
@@ -41,9 +41,9 @@ import { RoomMapDirective } from '../shared/room-map.directive';
                     <article class="matrix-session" tabindex="0" [attr.data-density]="sessionDensity(session)" [attr.aria-label]="sessionLabel(session)" [style.top.px]="sessionTop(session)" [style.height.px]="sessionHeight(session)" [style.background]="courseColor(session.courseName)">
                       <strong>{{ session.courseName }}</strong>
                       <div class="session-details">
-                        <span class="session-time">{{ session.startsAt | date:'HH:mm' }} - {{ session.endsAt | date:'HH:mm' }}</span>
-                        <span class="session-teacher">{{ session.teacher || 'Teacher TBA' }}</span>
-                        <span class="session-room"><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || 'TBA' }}</button></span>
+                        <span class="session-time">{{ session.startsAt | appDate:'HH:mm' }} - {{ session.endsAt | appDate:'HH:mm' }}</span>
+                        <span class="session-teacher">{{ session.teacher || ('Teacher TBA' | t) }}</span>
+                        <span class="session-room"><button [appRoomMap]="session.room"><span class="material-symbols-rounded">location_on</span>{{ session.room || ('TBA' | t) }}</button></span>
                       </div>
                     </article>
                   }
@@ -55,26 +55,26 @@ import { RoomMapDirective } from '../shared/room-map.directive';
       } @else {
         <div class="course-grid">
           @for (course of courseStats(); track course.id) {
-            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || 'Teacher unavailable' }}</p><div class="course-room"><button [appRoomMap]="course.room"><span class="material-symbols-rounded">location_on</span>{{ course.room || 'Room TBA' }}</button> @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</div><div class="counts">
+            <article class="course-card surface"><div class="course-icon">{{ initials(course.name) }}</div><h2>{{ course.name }}</h2><p>{{ course.teacher || ('Teacher unavailable' | t) }}</p><div class="course-room"><button [appRoomMap]="course.room"><span class="material-symbols-rounded">location_on</span>{{ course.room || ('Room TBA' | t) }}</button> @if (course.sectionNumber) { <span>· {{ course.sectionNumber }}</span> }</div><div class="counts">
               @for (stat of course.details; track stat.kind) {
                 <div class="count-item" (mouseenter)="hoverCourseDetail(course.id, stat.kind)" (mouseleave)="clearCourseHover()" (focusin)="hoverCourseDetail(course.id, stat.kind)" (focusout)="clearCourseHover()">
-                  <button class="count-trigger" type="button" [attr.aria-expanded]="courseDetailOpen(course.id, stat.kind)" [attr.aria-controls]="courseDetailId(course.id, stat.kind)" (click)="toggleCourseDetail(course.id, stat.kind)" (keydown.escape)="closeCourseDetail()"><strong>{{ stat.sessions.length }}</strong><span>{{ stat.label }}</span></button>
+                  <button class="count-trigger" type="button" [attr.aria-expanded]="courseDetailOpen(course.id, stat.kind)" [attr.aria-controls]="courseDetailId(course.id, stat.kind)" (click)="toggleCourseDetail(course.id, stat.kind)" (keydown.escape)="closeCourseDetail()"><strong>{{ stat.sessions.length }}</strong><span>{{ (stat.label | t) }}</span></button>
                   @if (courseDetailOpen(course.id, stat.kind)) {
-                    <div class="count-detail" [id]="courseDetailId(course.id, stat.kind)" role="region" [attr.aria-label]="stat.label + ' classes for ' + course.name" (mouseenter)="hoverCourseDetail(course.id, stat.kind)" (mouseleave)="clearCourseHover()">
-                      <strong>{{ stat.label }} classes</strong>
+                    <div class="count-detail" [id]="courseDetailId(course.id, stat.kind)" role="region" [attr.aria-label]="'{group} classes for {course}' | t:{group: (stat.label | t), course: course.name}" (mouseenter)="hoverCourseDetail(course.id, stat.kind)" (mouseleave)="clearCourseHover()">
+                      <strong>{{ '{group} classes' | t:{group: (stat.label | t)} }}</strong>
                       @if (stat.sessions.length) {
                         <ul>
                           @for (session of stat.sessions; track session.id) {
-                            <li><span class="detail-date">{{ session.startsAt | date:'EEE, MMM d' }}</span><span>{{ session.startsAt | date:'HH:mm' }}–{{ session.endsAt | date:'HH:mm' }}</span><span><button [appRoomMap]="session.room">{{ session.room || 'Room TBA' }}</button></span></li>
+                            <li><span class="detail-date">{{ session.startsAt | appDate:'EEE, MMM d' }}</span><span>{{ session.startsAt | appDate:'HH:mm' }}–{{ session.endsAt | appDate:'HH:mm' }}</span><span><button [appRoomMap]="session.room">{{ session.room || ('Room TBA' | t) }}</button></span></li>
                           }
                         </ul>
-                      } @else { <span class="detail-empty">No classes in this group.</span> }
+                      } @else { <span class="detail-empty">{{ 'No classes in this group.' | t }}</span> }
                     </div>
                   }
                 </div>
               }
             </div></article>
-          } @empty { <div class="surface empty-state">No courses are available.</div> }
+          } @empty { <div class="surface empty-state">{{ 'No courses are available.' | t }}</div> }
         </div>
       }
     </div>
@@ -106,6 +106,7 @@ import { RoomMapDirective } from '../shared/room-map.directive';
   `,
 })
 export class SchedulePage {
+  readonly i18n = inject(I18nService);
   readonly store = inject(LocalStore);
   readonly view = signal<'week' | 'courses'>('week');
   readonly layout = signal<'agenda' | 'grid'>('agenda');
@@ -180,7 +181,12 @@ export class SchedulePage {
     if (height >= 40) return 'medium';
     return 'compact';
   }
-  sessionLabel(session: ClassSession): string { return `${session.courseName}, ${this.timeText(session.startsAt)} to ${this.timeText(session.endsAt)}, ${session.teacher || 'teacher unavailable'}, room ${session.room || 'TBA'}`; }
+  sessionLabel(session: ClassSession): string {
+    return this.i18n.t('{course}, {start} to {end}, {teacher}, room {room}', {
+      course: session.courseName, start: this.timeText(session.startsAt), end: this.timeText(session.endsAt),
+      teacher: session.teacher || this.i18n.t('Teacher unavailable'), room: session.room || this.i18n.t('TBA'),
+    });
+  }
   hourLabel(minutes: number): string { return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:00`; }
   courseColor(name: string): string { const colors = ['#d9eef7', '#e9e0f1', '#dff1dc', '#f7e1e7', '#fff0c7', '#d9f2ef', '#e7e9f7']; return colors[Math.abs([...name].reduce((hash, char) => hash * 31 + char.charCodeAt(0), 0)) % colors.length]; }
   private minutes(date: Date): number { return date.getHours() * 60 + date.getMinutes(); }

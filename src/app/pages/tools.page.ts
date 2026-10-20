@@ -1,3 +1,4 @@
+import { TranslatePipe } from '../core/i18n.service';
 import { Component, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { PlatformService } from '../core/platform.service';
@@ -5,16 +6,16 @@ import { PhoneReceiverService } from '../core/phone-receiver.service';
 
 @Component({
   selector: 'app-tools-page',
-  imports: [RouterLink],
+  imports: [TranslatePipe, RouterLink],
   template: `
     <div class="page">
-      <header class="page-header"><h1 class="page-title">Tools</h1></header>
-      <section class="tool-list" aria-label="Available tools">
-        <a class="tool-row surface" routerLink="/tools/map"><span class="tool-icon material-symbols-rounded">map</span><span><strong>Map</strong><small>Find classrooms, buildings, and facilities on the WLSA campus.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a>
-        @if (platform.info.kind === 'android') { <button class="tool-row surface" (click)="receiver.open()"><span class="tool-icon material-symbols-rounded">phonelink</span><span><strong>Connect to computer</strong><small>Phone control</small></span><span class="arrow material-symbols-rounded">chevron_right</span></button> }
-        @if (platform.info.kind !== 'web') { <a class="tool-row surface" routerLink="/tools/vpn"><span class="tool-icon material-symbols-rounded">vpn_lock</span><span><strong>VPN</strong><small>Free VPN used for access to apps and websites blocked by school Wi-Fi. Sometimes unstable.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a> }
-        @if (platform.info.supportsPhoneControl) { <a class="tool-row surface" routerLink="/tools/phone"><span class="tool-icon material-symbols-rounded">cast</span><span><strong>Phone control</strong><small>Use an Android phone from your laptop over the same Wi-Fi, with sound and the phone display turned off.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a> }
-        <a class="tool-row surface" routerLink="/tools/translate"><span class="tool-icon material-symbols-rounded">translate</span><span><strong>Translator</strong><small>Translate text between languages and recognize text from a selected screen region on Windows.</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a>
+      <header class="page-header"><h1 class="page-title">{{ 'Tools' | t }}</h1></header>
+      <section class="tool-list" [attr.aria-label]="'Available tools' | t">
+        <a class="tool-row surface" routerLink="/tools/map"><span class="tool-icon material-symbols-rounded">map</span><span><strong>{{ 'Map' | t }}</strong><small>{{ 'Find classrooms, buildings, and facilities on the WLSA campus.' | t }}</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a>
+        @if (platform.info.kind === 'android') { <button class="tool-row surface" (click)="receiver.open()"><span class="tool-icon material-symbols-rounded">phonelink</span><span><strong>{{ 'Connect to computer' | t }}</strong><small>{{ 'Phone control' | t }}</small></span><span class="arrow material-symbols-rounded">chevron_right</span></button> }
+        @if (platform.info.kind !== 'web') { <a class="tool-row surface" routerLink="/tools/vpn"><span class="tool-icon material-symbols-rounded">vpn_lock</span><span><strong>VPN</strong><small>{{ 'Free VPN used for access to apps and websites blocked by school Wi-Fi. Sometimes unstable.' | t }}</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a> }
+        @if (platform.info.supportsPhoneControl) { <a class="tool-row surface" routerLink="/tools/phone"><span class="tool-icon material-symbols-rounded">cast</span><span><strong>{{ 'Phone control' | t }}</strong><small>{{ 'Use an Android phone from your laptop over the same Wi-Fi, with sound and the phone display turned off.' | t }}</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a> }
+        <a class="tool-row surface" routerLink="/tools/translate"><span class="tool-icon material-symbols-rounded">translate</span><span><strong>{{ 'Translator' | t }}</strong><small>{{ 'Translate text between languages and recognize text from a selected screen region on Windows.' | t }}</small></span><span class="arrow material-symbols-rounded">chevron_right</span></a>
       </section>
     </div>
   `,
@@ -28,4 +29,5 @@ import { PhoneReceiverService } from '../core/phone-receiver.service';
     @media (max-width: 520px) { .tool-row { grid-template-columns: 42px minmax(0,1fr) 20px; padding: 15px 13px; gap: 11px; } .tool-icon { width: 42px; height: 42px; font-size: 23px; } }
   `,
 })
-export class ToolsPage { readonly platform = inject(PlatformService); readonly receiver = inject(PhoneReceiverService); }
+export class ToolsPage {
+  readonly platform = inject(PlatformService); readonly receiver = inject(PhoneReceiverService); }

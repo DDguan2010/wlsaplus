@@ -48,6 +48,16 @@ describe('home timeline', () => {
     expect(lanes[1].map((item) => item.id)).toEqual(['two']);
   });
 
+  it('localizes timeline dates and labels without translating task content', () => {
+    const tasks: TodoItem[] = [{ id: 'ddl', title: 'English essay', details: 'Keep original', createdAt: '2026-09-05T08:00:00.000Z', endAt: '2026-09-08T08:00:00.000Z', color: null, icon: null, timeType: 'deadline' }];
+    const entry = buildHomeTimeline([], tasks, NOW, { locale: 'zh-CN', due: '截止', scheduled: '安排于', to: '至' }).deadlineLanes[0][0];
+    expect(entry.title).toBe('English essay');
+    expect(entry.tooltip).toContain('截止');
+    expect(entry.tooltip).toContain('9月8日');
+    expect(entry.tooltip).toContain('Keep original');
+    expect(entry.tooltip).not.toContain('Due');
+  });
+
   it('limits zoom and keeps the centered time visible as density changes', () => {
     expect(clampHomeTimelineZoom(25)).toBe(50);
     expect(clampHomeTimelineZoom(125)).toBe(125);
