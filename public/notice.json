@@ -1,6 +1,6 @@
 {
-  "id": "vpn-daily-limit-2026-10-19",
-  "title": "VPN daily limit update",
-  "content": "Some users have been consuming a very large amount of the shared VPN quota, so the shared service now has a total daily limit of 5 GB. This limit applies to subscription transfers through the relay and resets at 00:00 UTC. If it is reached, new subscription downloads may be unavailable until the next UTC day. The upstream provider's quota reset does not change this relay limit.",
+  "id": "vpn-protocol-update-2026-10-21",
+  "title": "WLSAPlus v1.0.10 VPN update required",
+  "content": "Version 1.0.10 updates the VPN relay protocol and traffic-limit checks. Please update WLSAPlus before using the VPN; older versions can no longer connect. The shared VPN traffic limit is 5 GB per UTC day. WLSAPlus will disconnect the desktop VPN when the relay reports that the daily limit has been reached.",
   "type": "warning"
 }

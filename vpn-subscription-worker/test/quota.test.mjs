@@ -74,7 +74,10 @@ test('the subscription endpoint counts response bytes before returning them', as
   data.set('daily', { date, bytes: DAILY_EGRESS_LIMIT_BYTES - 5 });
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response('12345', {
-    headers: { 'Content-Type': 'text/plain' },
+    headers: {
+      'Content-Type': 'text/plain',
+      'subscription-userinfo': 'upload=0; download=0; total=322122547200',
+    },
   });
   t.after(() => { globalThis.fetch = originalFetch; });
 
@@ -85,17 +88,53 @@ test('the subscription endpoint counts response bytes before returning them', as
       get: () => ({ fetch: (input, init) => quota.fetch(new Request(input, init)) }),
     },
   };
-  const request = () => worker.fetch(new Request('https://worker.example/api/subscribe?format=ss'), env);
+  const request = () => worker.fetch(new Request('https://worker.example/api/subscribe?format=ss&protocol=2'), env);
 
   const response = await request();
   assert.equal(response.status, 200);
   assert.equal(response.headers.get('Content-Length'), '5');
-  assert.equal(response.headers.get('X-WLSAPlus-Daily-Remaining-Bytes'), '0');
+  assert.equal(response.headers.get('X-WLSAPlus-Subscription-Remaining-Bytes'), '0');
+  assert.equal(response.headers.get('X-WLSAPlus-Daily-Remaining-Bytes'), String(DAILY_EGRESS_LIMIT_BYTES));
   assert.equal(await response.text(), '12345');
 
   const rejected = await request();
   assert.equal(rejected.status, 429);
   assert.equal(data.get('daily').bytes, DAILY_EGRESS_LIMIT_BYTES);
+});
+
+test('old VPN clients are rejected by the relay protocol gate', async () => {
+  const response = await worker.fetch(new Request('https://worker.example/api/subscribe?format=ss'), {
+    UPSTREAM_SUBSCRIPTION_URL: 'https://upstream.example/subscribe',
+  });
+  assert.equal(response.status, 426);
+  assert.equal((await response.json()).requiredProtocol, '2');
+});
+
+test('provider usage is counted from cumulative upload and download deltas', async () => {
+  const { quota, data } = createQuota();
+  const date = '2026-10-21';
+
+  const baseline = await quota.fetch(new Request('https://quota.internal/provider-usage', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date, totalBytes: '1000' }),
+  }));
+  assert.equal(baseline.status, 200);
+  assert.deepEqual(await baseline.json(), { allowed: true, usageBytes: 0, remaining: DAILY_EGRESS_LIMIT_BYTES });
+
+  const update = await quota.fetch(new Request('https://quota.internal/provider-usage', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date, totalBytes: String(1_000 + 4_999_999_999) }),
+  }));
+  assert.equal(update.status, 200);
+  assert.deepEqual(await update.json(), { allowed: true, usageBytes: 4_999_999_999, remaining: 1 });
+
+  const over = await quota.fetch(new Request('https://quota.internal/provider-usage', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ date, totalBytes: String(1_000 + 5_000_000_000) }),
+  }));
+  assert.equal(over.status, 429);
+  assert.deepEqual(await over.json(), { allowed: false, usageBytes: 5_000_000_000, remaining: 0 });
+  assert.equal(data.get('provider').dailyBytes, String(5_000_000_000));
 });
 
 test('invalid reservations are rejected without changing usage', async () => {

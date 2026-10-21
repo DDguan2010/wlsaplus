@@ -4,14 +4,27 @@ This Worker hides the upstream subscription URL from WLSAPlus clients. It is a
 subscription proxy only; it does not tunnel VPN traffic. Desktop WLSAPlus still
 runs sing-box locally, and Android opens the returned profile in a compatible
 VPN client. The Worker also enforces a shared 5 GB daily egress quota for
-subscription responses. The quota resets at 00:00 UTC. The limit is decimal
-5 GB (5,000,000,000 bytes), shared by every client of this Worker.
+subscription responses and reads the upstream `subscription-userinfo` header to
+enforce a shared 5 GB daily traffic gate. The quota resets at 00:00 UTC. The
+limit is decimal 5 GB (5,000,000,000 bytes), shared by every client of this
+Worker.
 
-This quota counts bytes returned by this Worker while downloading the
-subscription configuration. It does **not** count traffic sent later from a
-client directly to the VPN nodes in that configuration. A real per-user VPN
-traffic quota must be enforced by the upstream VPN service or a relay that
-handles the VPN traffic itself.
+The traffic gate uses the provider's cumulative `upload + download` value and
+counts its observed delta between requests. `/api/usage` can be polled by a
+client while connected; once the provider reports 5 GB for the current UTC day,
+the Worker returns HTTP 429 and stops issuing profiles. The Worker cannot
+interrupt an already-running direct connection to a VPN node, because that
+traffic does not pass through Cloudflare. A strict packet-level cap requires
+the upstream VPN service or a relay that carries the VPN traffic itself.
+
+The relay now requires VPN protocol version `2` (`protocol=2` or the
+`X-WLSAPlus-VPN-Protocol: 2` header). Older WLSAPlus clients receive HTTP 426
+and must update before connecting.
+
+If the upstream omits `subscription-userinfo`, the Worker fails closed with
+HTTP 503 instead of silently allowing unmetered access. The optional
+`REQUIRE_PROVIDER_USAGE=false` setting restores the old subscription-only
+fallback and should not be used when a traffic cap is required.
 
 ## Deploy
 

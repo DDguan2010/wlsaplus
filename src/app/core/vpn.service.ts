@@ -42,7 +42,7 @@ export class VpnService {
       this.status.set({ ...this.status(), state: 'connecting', message: 'Opening VPN client...' });
       try {
         const source = vpnSource(this.sourceId());
-        const url = `${source.endpoint}?format=clash`;
+        const url = `${source.endpoint}?format=clash&protocol=2`;
         await WlsaTools.importVpn({ url, name: source.name });
         this.status.set({ state: 'delegated', message: `${source.name} opened in your VPN client.`, connectedAt: null, mode: 'external-client', sourceId: source.id });
       } catch (error) {

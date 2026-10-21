@@ -63,9 +63,13 @@ const prepareUpdateMode = process.argv.includes('--prepare-update');
 const vpnAutoConnectMode = process.argv.includes('--vpn-autoconnect=full-tunnel') ? 'full-tunnel' : null;
 const vpnAutoConnectSource = getVpnSource((process.argv.find((argument) => argument.startsWith('--vpn-source=')) || '').slice('--vpn-source='.length)).id;
 const VPN_PORT = 17890;
+const VPN_PROTOCOL_VERSION = '2';
+const VPN_USAGE_POLL_INTERVAL_MS = 15_000;
 let vpnProcess = null;
 let macVpnRunning = false;
 let vpnDisconnecting = false;
+let vpnUsageTimer = null;
+let vpnUsageCheckInFlight = false;
 let vpnStatus = { state: 'idle', message: 'Ready', connectedAt: null, mode: 'full-tunnel' };
 let vpnProcessError = '';
 let quitAfterCleanup = false;
@@ -230,7 +234,7 @@ async function resolvePublicIpv4(hostname) {
   throw new Error('Could not resolve the WLSAPlus relay server outside the system DNS.');
 }
 
-function secureGetByAddress(address, servername, requestPath, accept = 'text/plain') {
+function secureGetByAddress(address, servername, requestPath, accept = 'text/plain', extraHeaders = {}) {
   return new Promise((resolve, reject) => {
     const request = nodeHttps.request({
       host: address,
@@ -238,12 +242,12 @@ function secureGetByAddress(address, servername, requestPath, accept = 'text/pla
       servername,
       path: requestPath,
       method: 'GET',
-      headers: { Host: servername, Accept: accept, 'User-Agent': `WLSAPlus/${app.getVersion()}` },
+      headers: { Host: servername, Accept: accept, 'User-Agent': `WLSAPlus/${app.getVersion()}`, ...extraHeaders },
       timeout: 10_000,
     }, (response) => {
       const chunks = [];
       response.on('data', (chunk) => chunks.push(chunk));
-      response.on('end', () => resolve({ status: response.statusCode || 0, text: Buffer.concat(chunks).toString('utf8') }));
+      response.on('end', () => resolve({ status: response.statusCode || 0, text: Buffer.concat(chunks).toString('utf8'), headers: response.headers }));
     });
     request.on('timeout', () => request.destroy(new Error('Request timeout')));
     request.on('error', reject);
@@ -253,11 +257,13 @@ function secureGetByAddress(address, servername, requestPath, accept = 'text/pla
 
 async function fetchVpnProfile(sourceId = 'relay') {
   const subscription = subscriptionUrl(sourceId, 'ss');
+  subscription.searchParams.set('protocol', VPN_PROTOCOL_VERSION);
   const addresses = await resolvePublicIpv4(subscription.hostname);
   let lastError;
   for (const address of addresses) {
     try {
-      const response = await secureGetByAddress(address, subscription.hostname, `${subscription.pathname}${subscription.search}`);
+      const response = await secureGetByAddress(address, subscription.hostname, `${subscription.pathname}${subscription.search}`, 'text/plain', { 'X-WLSAPlus-VPN-Protocol': VPN_PROTOCOL_VERSION });
+      if (response.status === 426) throw new Error('This WLSAPlus version cannot use the VPN. Update WLSAPlus and try again.');
       if (response.status !== 200) throw new Error(`${getVpnSource(sourceId).name} subscription returned ${response.status}.`);
       const body = response.text.trim();
       const clashProfile = parseClashShadowsocksProfile(body);
@@ -269,6 +275,75 @@ async function fetchVpnProfile(sourceId = 'relay') {
     } catch (error) { lastError = error; }
   }
   throw new Error(lastError?.message || 'Could not download the WLSAPlus relay subscription.');
+}
+
+async function fetchVpnUsage(sourceId = 'relay') {
+  const usageUrl = subscriptionUrl(sourceId, 'ss');
+  usageUrl.pathname = '/api/usage';
+  usageUrl.searchParams.set('protocol', VPN_PROTOCOL_VERSION);
+  const addresses = await resolvePublicIpv4(usageUrl.hostname);
+  let lastError;
+  for (const address of addresses) {
+    try {
+      const response = await secureGetByAddress(address, usageUrl.hostname, `${usageUrl.pathname}${usageUrl.search}`, 'application/json', { 'X-WLSAPlus-VPN-Protocol': VPN_PROTOCOL_VERSION });
+      if (response.status === 426) {
+        const error = new Error('This WLSAPlus version cannot use the VPN. Update WLSAPlus and try again.');
+        error.code = 'VPN_UPDATE_REQUIRED';
+        throw error;
+      }
+      let body = {};
+      try { body = JSON.parse(response.text); } catch { /* use the HTTP status below */ }
+      if (response.status === 429) {
+        const error = new Error('The daily VPN traffic limit has been reached. VPN was disconnected.');
+        error.code = 'VPN_DAILY_LIMIT';
+        throw error;
+      }
+      if (response.status !== 200) throw new Error(String(body.error || `${getVpnSource(sourceId).name} usage returned ${response.status}.`));
+      const usageBytes = Number(body.usageBytes);
+      const remainingBytes = Number(body.remainingBytes);
+      if (!Number.isSafeInteger(usageBytes) || !Number.isSafeInteger(remainingBytes) || usageBytes < 0 || remainingBytes < 0) {
+        throw new Error('The VPN relay returned invalid traffic usage data.');
+      }
+      return { usageBytes, remainingBytes };
+    } catch (error) { lastError = error; }
+  }
+  throw lastError || new Error('Could not verify the VPN traffic usage.');
+}
+
+function stopVpnUsageMonitor() {
+  if (vpnUsageTimer) clearInterval(vpnUsageTimer);
+  vpnUsageTimer = null;
+  vpnUsageCheckInFlight = false;
+}
+
+async function enforceVpnUsage(sourceId) {
+  if (vpnUsageCheckInFlight || vpnStatus.state !== 'connected') return;
+  vpnUsageCheckInFlight = true;
+  try {
+    const usage = await fetchVpnUsage(sourceId);
+    if (usage.remainingBytes <= 0) {
+      const error = new Error('The daily VPN traffic limit has been reached. VPN was disconnected.');
+      error.code = 'VPN_DAILY_LIMIT';
+      throw error;
+    }
+  } catch (error) {
+    if (vpnStatus.state !== 'connected') return;
+    const mode = normalizeVpnMode(vpnStatus.mode);
+    const message = error?.code === 'VPN_DAILY_LIMIT'
+      ? error.message
+      : 'VPN traffic usage could not be verified, so the VPN was disconnected for safety.';
+    await disconnectVpn();
+    setVpnStatus({ state: 'error', message, connectedAt: null, mode, sourceId, requiresElevation: false });
+  } finally {
+    vpnUsageCheckInFlight = false;
+  }
+}
+
+function startVpnUsageMonitor(sourceId) {
+  stopVpnUsageMonitor();
+  vpnUsageTimer = setInterval(() => { void enforceVpnUsage(sourceId); }, VPN_USAGE_POLL_INTERVAL_MS);
+  vpnUsageTimer.unref?.();
+  void enforceVpnUsage(sourceId);
 }
 
 async function resolveVpnServer(profile) {
@@ -566,6 +641,7 @@ async function connectVpn(requestedMode = 'full-tunnel', requestedSource = 'rela
       child.once('exit', (code) => {
         if (vpnProcess !== child) return;
         vpnProcess = null;
+        stopVpnUsageMonitor();
         if (!vpnDisconnecting) {
           const detail = vpnProcessError.trim().split(/\r?\n/).at(-1);
           void restoreSavedSystemProxy().finally(() => setVpnStatus({ state: 'error', message: detail || `WLSAPlus relay stopped unexpectedly (${code ?? 'unknown'}).`, connectedAt: null, mode, requiresElevation: false }));
@@ -576,10 +652,13 @@ async function connectVpn(requestedMode = 'full-tunnel', requestedSource = 'rela
     if (mode === 'full-tunnel') await waitForFullTunnelInterface();
     await verifyVpnConnection(mode);
     if (mode === 'system-proxy') await enableSystemProxy();
-    return setVpnStatus({ state: 'connected', message: mode === 'full-tunnel' ? `Full device protected by ${sourceName}` : `Web traffic protected by ${sourceName}`, connectedAt: new Date().toISOString(), mode, sourceId, requiresElevation: false });
+    const connectedStatus = setVpnStatus({ state: 'connected', message: mode === 'full-tunnel' ? `Full device protected by ${sourceName}` : `Web traffic protected by ${sourceName}`, connectedAt: new Date().toISOString(), mode, sourceId, requiresElevation: false });
+    startVpnUsageMonitor(sourceId);
+    return connectedStatus;
   } catch (error) {
     const processExited = process.platform === 'darwin' ? !macVpnRunning : (!vpnProcess || vpnProcess.exitCode !== null);
     vpnDisconnecting = true;
+    stopVpnUsageMonitor();
     if (process.platform === 'darwin' && macVpnRunning) await stopMacVpn().catch(() => {});
     await stopVpnProcess();
     await restoreSavedSystemProxy().catch(() => {});
@@ -592,6 +671,7 @@ async function connectVpn(requestedMode = 'full-tunnel', requestedSource = 'rela
 
 async function disconnectVpn() {
   const mode = normalizeVpnMode(vpnStatus.mode);
+  stopVpnUsageMonitor();
   setVpnStatus({ state: 'disconnecting', message: 'Disconnecting...', mode, requiresElevation: false });
   vpnDisconnecting = true;
   try {
