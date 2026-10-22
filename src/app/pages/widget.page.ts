@@ -32,7 +32,7 @@ import { RoomMapDirective } from '../shared/room-map.directive';
             } @empty { <p class="muted">{{ 'Nothing to do.' | t }}</p> }
           </div>
         } @else if (type() === 'today') {
-          <div class="title-row"><div><div class="status">{{ clock.now() | appDate:'EEEE' }}</div><h1>{{ 'Today\'s classes' | t }}</h1></div><strong class="count">{{ today().length }}</strong></div>
+          <div class="title-row"><div><div class="status">{{ clock.now() | appDate:'EEEE' }}</div><h1>{{ "Today's classes" | t }}</h1></div><strong class="count">{{ today().length }}</strong></div>
           @for (session of today(); track session.id) { <div class="row"><time><strong>{{ session.startsAt | appDate:'HH:mm' }}</strong><span>{{ session.endsAt | appDate:'HH:mm' }}</span></time><div><strong>{{ session.courseName }}</strong><span>{{ session.teacher || ('Teacher TBA' | t) }} · <button [appRoomMap]="session.room">{{ session.room || ('Room TBA' | t) }}</button></span></div></div> } @empty { <p class="muted">{{ 'No classes today.' | t }}</p> }
         } @else {
           <div class="status-line"><span class="status">{{ type() === 'next-class' ? ('UP NEXT' | t) : current() ? ('IN CLASS' | t) : ('UP NEXT' | t) }}</span><time>{{ clock.now() | appDate:'EEE, MMM d · HH:mm' }}</time></div>
